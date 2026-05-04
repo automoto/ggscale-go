@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	ggscale "github.com/ggscale/ggscale-go"
+	ggscale "github.com/automoto/ggscale-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

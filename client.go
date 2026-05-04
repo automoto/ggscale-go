@@ -32,6 +32,7 @@ type Client struct {
 	Storage      *StorageService
 	Leaderboards *LeaderboardsService
 	Profile      *ProfileService
+	Fleet        *FleetService
 
 	transport Transport
 	apiKey    string
@@ -77,6 +78,7 @@ func NewClient(opts Options) (*Client, error) {
 	c.Storage = &StorageService{c: c}
 	c.Leaderboards = &LeaderboardsService{c: c}
 	c.Profile = &ProfileService{c: c}
+	c.Fleet = &FleetService{transport: t, apiKey: opts.APIKey, c: c}
 	return c, nil
 }
 

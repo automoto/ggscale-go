@@ -15,7 +15,7 @@ import (
 	"log"
 	"os"
 
-	ggscale "github.com/ggscale/ggscale-go"
+	ggscale "github.com/automoto/ggscale-go"
 )
 
 func main() {

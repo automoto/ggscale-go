@@ -9,7 +9,7 @@ The SDK has zero third-party runtime dependencies — just the standard library.
 ## Install
 
 ```sh
-go get github.com/ggscale/ggscale-go
+go get github.com/automoto/ggscale-go
 ```
 
 Requires Go 1.24 or later.
@@ -25,7 +25,7 @@ import (
     "log"
     "os"
 
-    ggscale "github.com/ggscale/ggscale-go"
+    ggscale "github.com/automoto/ggscale-go"
 )
 
 func main() {

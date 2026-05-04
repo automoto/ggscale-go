@@ -26,14 +26,14 @@ The reason for a proposal at all: every other piece of the SDK depends on these 
 
 ## Why a separate Go module
 
-`sdk-go/` ships with its own `go.mod` (`github.com/ggscale/ggscale-go`, Go 1.24). It depends on nothing in the parent module and the parent depends on nothing in it.
+`sdk-go/` ships with its own `go.mod` (`github.com/automoto/ggscale-go`, Go 1.24). It depends on nothing in the parent module and the parent depends on nothing in it.
 
 Two reasons:
 
 1. The directory is likely to be split into its own repo later. With its own module from day one, the split is a `git filter-repo` operation that doesn't change a single import path on the consumer side.
 2. doomerang-mp is on Go 1.24. If the SDK shared the parent's `go 1.26.2`, every game project on a slightly older toolchain would be locked out. The server can move ahead independently.
 
-The rule that follows: nothing in `sdk-go/` may import `github.com/ggscale/ggscale/...`, and nothing in the parent module may import `github.com/ggscale/ggscale-go`. Test fixtures in the SDK that need server behavior use `httptest.NewServer` with hand-rolled handlers, not the real `internal/httpapi` router.
+The rule that follows: nothing in `sdk-go/` may import `github.com/ggscale/ggscale/...`, and nothing in the parent module may import `github.com/automoto/ggscale-go`. Test fixtures in the SDK that need server behavior use `httptest.NewServer` with hand-rolled handlers, not the real `internal/httpapi` router.
 
 ## `Transport`
 
