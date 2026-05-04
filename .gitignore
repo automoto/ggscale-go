@@ -1,0 +1,18 @@
+# Build output (no committed binaries; quickstart is run via `go run`).
+/bin/
+/dist/
+
+# Test artifacts.
+*.out
+coverage.out
+coverage.html
+
+# Editor / IDE.
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Vendored deps (we use Go modules, not vendor/).
+/vendor/
