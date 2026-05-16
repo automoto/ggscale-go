@@ -32,13 +32,16 @@ type Client struct {
 	Storage      *StorageService
 	Leaderboards *LeaderboardsService
 	Profile      *ProfileService
-	Fleet        *FleetService
+	Matchmaker   *MatchmakerService
+	Relay        *RelayService
 
 	transport Transport
 	apiKey    string
+	baseURL   string
 
-	sessionMu sync.RWMutex
-	session   *Session
+	sessionMu       sync.RWMutex
+	session         *Session
+	onSessionUpdate func(*Session)
 }
 
 // Options configures NewClient.
@@ -48,11 +51,19 @@ type Options struct {
 	Transport Transport
 
 	// BaseURL is the ggscale-server base URL (no trailing slash),
-	// e.g. "http://localhost:8080". Required when Transport is nil.
+	// e.g. "http://localhost:8080". Required when Transport is nil;
+	// also used by DialRealtime to derive the WebSocket URL.
 	BaseURL string
 
 	// APIKey is the tenant API key. Required.
 	APIKey string
+
+	// OnSessionUpdate, if non-nil, is called whenever the client
+	// installs or rotates a session — once after Login (or
+	// SetSession) and once after each automatic refresh. Useful for
+	// persisting the session across process restarts; see
+	// AnonymousAuth.SaveSession for a ready-made callback.
+	OnSessionUpdate func(*Session)
 }
 
 // NewClient builds a Client. The returned Client has no session yet;
@@ -71,14 +82,17 @@ func NewClient(opts Options) (*Client, error) {
 	}
 
 	c := &Client{
-		transport: t,
-		apiKey:    opts.APIKey,
+		transport:       t,
+		apiKey:          opts.APIKey,
+		baseURL:         opts.BaseURL,
+		onSessionUpdate: opts.OnSessionUpdate,
 	}
 	c.Auth = &AuthService{transport: t, apiKey: opts.APIKey}
 	c.Storage = &StorageService{c: c}
 	c.Leaderboards = &LeaderboardsService{c: c}
 	c.Profile = &ProfileService{c: c}
-	c.Fleet = &FleetService{transport: t, apiKey: opts.APIKey, c: c}
+	c.Matchmaker = &MatchmakerService{c: c}
+	c.Relay = &RelayService{c: c}
 	return c, nil
 }
 
@@ -109,16 +123,26 @@ func (c *Client) Session() *Session {
 
 // SetSession installs a session previously captured via Session.
 // Useful for restoring a session across process restarts. Pass nil
-// to clear.
+// to clear. Fires OnSessionUpdate when set.
 func (c *Client) SetSession(s *Session) {
 	c.sessionMu.Lock()
-	defer c.sessionMu.Unlock()
 	if s == nil {
 		c.session = nil
+		c.sessionMu.Unlock()
+		c.notifySessionUpdate(nil)
 		return
 	}
 	cp := *s
 	c.session = &cp
+	c.sessionMu.Unlock()
+	c.notifySessionUpdate(&cp)
+}
+
+func (c *Client) notifySessionUpdate(s *Session) {
+	if c.onSessionUpdate == nil {
+		return
+	}
+	c.onSessionUpdate(s)
 }
 
 // Transport returns the underlying transport. Useful when constructing
@@ -184,36 +208,51 @@ func (c *Client) refreshIfNeeded(ctx context.Context) error {
 		return nil
 	}
 
-	c.sessionMu.Lock()
-	defer c.sessionMu.Unlock()
-	// Re-check under the write lock — another goroutine may have
-	// refreshed while we were waiting.
-	if c.session == nil || c.session.RefreshToken == "" {
-		return nil
+	updated, err := c.refreshUnderLock(ctx, false)
+	if err != nil {
+		return err
 	}
-	if time.Until(c.session.ExpiresAt) >= proactiveRefreshWindow {
-		return nil
+	if updated != nil {
+		c.notifySessionUpdate(updated)
 	}
-	return c.doRefreshLocked(ctx)
+	return nil
 }
 
 // refreshNow forces a refresh regardless of expiry. Used after a 401.
 func (c *Client) refreshNow(ctx context.Context) error {
-	c.sessionMu.Lock()
-	defer c.sessionMu.Unlock()
-	if c.session == nil || c.session.RefreshToken == "" {
-		return errors.New("ggscale: cannot refresh — no refresh token")
-	}
-	return c.doRefreshLocked(ctx)
-}
-
-// doRefreshLocked does the actual refresh; the caller must hold the
-// write lock.
-func (c *Client) doRefreshLocked(ctx context.Context) error {
-	sess, err := c.Auth.Refresh(ctx, c.session.RefreshToken)
+	updated, err := c.refreshUnderLock(ctx, true)
 	if err != nil {
 		return err
 	}
-	c.session = sess
+	if updated != nil {
+		c.notifySessionUpdate(updated)
+	}
 	return nil
+}
+
+// refreshUnderLock performs the refresh and returns a snapshot of the
+// new session for the caller to deliver to OnSessionUpdate. force=false
+// re-checks the proactive window inside the write lock so refresh fires
+// once per expiry boundary; force=true bypasses the check (post-401).
+func (c *Client) refreshUnderLock(ctx context.Context, force bool) (*Session, error) {
+	c.sessionMu.Lock()
+	defer c.sessionMu.Unlock()
+
+	if c.session == nil || c.session.RefreshToken == "" {
+		if force {
+			return nil, errors.New("ggscale: cannot refresh — no refresh token")
+		}
+		return nil, nil
+	}
+	if !force && time.Until(c.session.ExpiresAt) >= proactiveRefreshWindow {
+		return nil, nil
+	}
+
+	sess, err := c.Auth.Refresh(ctx, c.session.RefreshToken)
+	if err != nil {
+		return nil, err
+	}
+	c.session = sess
+	cp := *sess
+	return &cp, nil
 }
