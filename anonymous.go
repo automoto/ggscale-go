@@ -92,7 +92,9 @@ type persistedSession struct {
 }
 
 func loadSessionFile(path string) (*Session, bool) {
-	raw, err := os.ReadFile(path)
+	// gosec G304: path is the caller-supplied storePath — the documented
+	// contract of NewAnonymousAuth.
+	raw, err := os.ReadFile(path) //nolint:gosec
 	if err != nil {
 		return nil, false
 	}
@@ -118,7 +120,10 @@ func saveSessionFile(path string, s *Session) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	raw, err := json.Marshal(persistedSession{
+	// gosec G117: persisting the session — including the access token —
+	// is the documented purpose of saveSessionFile. The file is written
+	// 0600 to the caller's chosen storePath.
+	raw, err := json.Marshal(persistedSession{ //nolint:gosec
 		AccessToken:  s.AccessToken,
 		RefreshToken: s.RefreshToken,
 		EndUserID:    s.EndUserID,

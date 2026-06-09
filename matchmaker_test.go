@@ -43,10 +43,10 @@ func TestMatchmakerService_GetTicket(t *testing.T) {
 			assert.Equal(t, http.MethodGet, req.Method)
 			assert.Equal(t, "/v1/matchmaker/tickets/42", req.Path)
 			return map[string]any{
-				"id":     int64(42),
-				"status": "matched",
+				"id":            int64(42),
+				"status":        "matched",
 				"match_address": "10.0.0.1:7777",
-				"created_at": time.Now().UTC().Format(time.RFC3339Nano),
+				"created_at":    time.Now().UTC().Format(time.RFC3339Nano),
 			}, nil
 		},
 	}

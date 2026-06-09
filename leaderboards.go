@@ -39,11 +39,32 @@ type entriesResponse struct {
 // Submit posts a score for the calling end-user. Each call inserts a
 // new row; the server keeps the player's best score for ranking
 // purposes.
+//
+// Server policy: leaderboard score submission requires a secret-tier
+// API key. Calls from a publishable-key client return ErrForbidden.
+// Game clients should hand the player's session token to a trusted
+// game server, which submits via SubmitFor instead.
 func (l *LeaderboardsService) Submit(ctx context.Context, leaderboardID, score int64) error {
 	return l.c.callProtected(ctx, &Request{
 		Method: http.MethodPost,
 		Path:   "/v1/leaderboards/" + strconv.FormatInt(leaderboardID, 10) + "/scores",
 		Body:   submitScoreRequest{Score: score},
+	}, nil)
+}
+
+// SubmitFor posts a score on behalf of the player identified by
+// playerSessionToken. The Client's own configured API key authorises
+// the caller (must be secret-tier) and the supplied session token
+// identifies the subject. Use from a dedicated game server processing
+// match-end results for many concurrent players, where mutating the
+// shared Client.Session() per submission would be incorrect.
+func (l *LeaderboardsService) SubmitFor(ctx context.Context, playerSessionToken string, leaderboardID, score int64) error {
+	return l.c.transport.Call(ctx, &Request{
+		Method:       http.MethodPost,
+		Path:         "/v1/leaderboards/" + strconv.FormatInt(leaderboardID, 10) + "/scores",
+		Body:         submitScoreRequest{Score: score},
+		APIKey:       l.c.apiKey,
+		SessionToken: playerSessionToken,
 	}, nil)
 }
 

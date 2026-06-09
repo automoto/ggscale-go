@@ -239,4 +239,5 @@ var (
 	_ Authenticator = (*EmailPasswordAuth)(nil)
 	_ Authenticator = (*CustomTokenAuth)(nil)
 	_ Authenticator = (*OfflineAuth)(nil)
+	_ Authenticator = (*AnonymousAuth)(nil)
 )

@@ -98,7 +98,7 @@ func (m *MatchmakerService) RequestMatch(ctx context.Context, req MatchRequest) 
 		_ = m.CancelTicket(context.WithoutCancel(ctx), ticket.ID)
 		return nil, fmt.Errorf("dial realtime: %w", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	for {
 		msg, err := rc.ReadMessage(ctx)
@@ -110,8 +110,8 @@ func (m *MatchmakerService) RequestMatch(ctx context.Context, req MatchRequest) 
 			continue
 		}
 		var payload struct {
-			Address   string `json:"address"`
-			TicketID  int64  `json:"ticket_id"`
+			Address  string `json:"address"`
+			TicketID int64  `json:"ticket_id"`
 		}
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			_ = m.CancelTicket(context.WithoutCancel(ctx), ticket.ID)

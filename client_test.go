@@ -273,6 +273,75 @@ func TestClient_concurrent_refresh_fires_once(t *testing.T) {
 	assert.Equal(t, int64(N), dt.callsTo("/v1/test"))
 }
 
+func TestClient_OnSessionUpdate_fires_on_login_and_refresh(t *testing.T) {
+	dt := newDispatchTransport()
+	dt.on("/v1/auth/login", func(*Request) (int, any) {
+		return 200, map[string]any{
+			"access_token":  "login.jwt",
+			"refresh_token": "login-refresh",
+			"end_user_id":   int64(7),
+			"expires_at":    time.Now().Add(15 * time.Minute),
+		}
+	})
+	dt.on("/v1/auth/refresh", func(*Request) (int, any) {
+		return 200, map[string]any{
+			"access_token":  "refreshed.jwt",
+			"refresh_token": "rotated-refresh",
+			"end_user_id":   int64(7),
+			"expires_at":    time.Now().Add(15 * time.Minute),
+		}
+	})
+	dt.on("/v1/test", func(*Request) (int, any) { return 200, map[string]any{} })
+
+	var mu sync.Mutex
+	var saw []string
+	c, _ := NewClient(Options{
+		APIKey:    "k",
+		Transport: dt,
+		OnSessionUpdate: func(s *Session) {
+			mu.Lock()
+			defer mu.Unlock()
+			if s == nil {
+				saw = append(saw, "<cleared>")
+				return
+			}
+			saw = append(saw, s.AccessToken)
+		},
+	})
+
+	require.NoError(t, c.Login(context.Background(), NewEmailPasswordAuth(dt, "k", "e", "p")))
+
+	// Force the proactive refresh window.
+	c.SetSession(&Session{
+		AccessToken:  "stale.jwt",
+		RefreshToken: "stale-refresh",
+		ExpiresAt:    time.Now().Add(2 * time.Second),
+	})
+	require.NoError(t, c.callProtected(context.Background(), &Request{Method: "GET", Path: "/v1/test"}, &map[string]any{}))
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, saw, 3, "OnSessionUpdate must fire for login, manual SetSession, and refresh")
+	assert.Equal(t, "login.jwt", saw[0])
+	assert.Equal(t, "stale.jwt", saw[1])
+	assert.Equal(t, "refreshed.jwt", saw[2])
+}
+
+func TestClient_OnSessionUpdate_fires_with_nil_on_clear(t *testing.T) {
+	var saw []*Session
+	c, _ := NewClient(Options{
+		APIKey:          "k",
+		BaseURL:         "http://localhost",
+		OnSessionUpdate: func(s *Session) { saw = append(saw, s) },
+	})
+	c.SetSession(&Session{AccessToken: "x", RefreshToken: "y"})
+	c.SetSession(nil)
+
+	require.Len(t, saw, 2)
+	assert.NotNil(t, saw[0])
+	assert.Nil(t, saw[1])
+}
+
 func TestClient_SetSession_round_trip(t *testing.T) {
 	dt := newDispatchTransport()
 	dt.on("/v1/test", func(req *Request) (int, any) {

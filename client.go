@@ -35,6 +35,11 @@ type Client struct {
 	Matchmaker   *MatchmakerService
 	Relay        *RelayService
 
+	// EndUsers exposes server-tier endpoints (e.g. session-token
+	// verification) for game-server workloads. Authenticates with the
+	// API key only — no end-user session required.
+	EndUsers *EndUsersService
+
 	transport Transport
 	apiKey    string
 	baseURL   string
@@ -93,6 +98,7 @@ func NewClient(opts Options) (*Client, error) {
 	c.Profile = &ProfileService{c: c}
 	c.Matchmaker = &MatchmakerService{c: c}
 	c.Relay = &RelayService{c: c}
+	c.EndUsers = &EndUsersService{transport: t, apiKey: opts.APIKey}
 	return c, nil
 }
 
