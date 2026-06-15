@@ -34,6 +34,7 @@ type Client struct {
 	Profile      *ProfileService
 	Matchmaker   *MatchmakerService
 	Relay        *RelayService
+	Fleets       *FleetsService
 
 	// EndUsers exposes server-tier endpoints (e.g. session-token
 	// verification) for game-server workloads. Authenticates with the
@@ -98,6 +99,7 @@ func NewClient(opts Options) (*Client, error) {
 	c.Profile = &ProfileService{c: c}
 	c.Matchmaker = &MatchmakerService{c: c}
 	c.Relay = &RelayService{c: c}
+	c.Fleets = &FleetsService{c: c}
 	c.EndUsers = &EndUsersService{transport: t, apiKey: opts.APIKey}
 	return c, nil
 }
