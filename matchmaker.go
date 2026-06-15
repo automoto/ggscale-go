@@ -87,18 +87,20 @@ func (m *MatchmakerService) CancelTicket(ctx context.Context, id int64) error {
 // arrives (or the context is cancelled). On success it returns the game
 // server address. On cancellation it best-effort cancels the ticket.
 func (m *MatchmakerService) RequestMatch(ctx context.Context, req MatchRequest) (*MatchReady, error) {
+	// Dial the realtime WS BEFORE creating the ticket. ServeWS registers
+	// the connection with the hub after the upgrade completes; if we
+	// post the ticket first, the matchmaker can allocate and try to push
+	// match_ready before we're in the hub — and the push is dropped.
+	rc, err := m.c.DialRealtime(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("dial realtime: %w", err)
+	}
+	defer func() { _ = rc.Close() }()
+
 	ticket, err := m.CreateTicket(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("create ticket: %w", err)
 	}
-
-	rc, err := m.c.DialRealtime(ctx)
-	if err != nil {
-		// Best-effort cleanup.
-		_ = m.CancelTicket(context.WithoutCancel(ctx), ticket.ID)
-		return nil, fmt.Errorf("dial realtime: %w", err)
-	}
-	defer func() { _ = rc.Close() }()
 
 	for {
 		msg, err := rc.ReadMessage(ctx)

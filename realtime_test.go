@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -182,6 +183,70 @@ func TestMatchmakerService_RequestMatch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "192.168.1.100:7777", ready.Address)
 	assert.Equal(t, int64(7), ready.TicketID)
+}
+
+// Regression: the matchmaker hub registers a client connection at WS
+// upgrade. If the SDK POSTs the ticket before opening WS, the matchmaker
+// can allocate and push match_ready before the client is registered —
+// the push is dropped and the client times out. This test records the
+// order of incoming requests and asserts /v1/ws hit the server BEFORE
+// POST /v1/matchmaker/tickets.
+func TestMatchmakerService_RequestMatch_DialsWSBeforePostingTicket(t *testing.T) {
+	var order []string
+	var orderMu sync.Mutex
+	record := func(s string) {
+		orderMu.Lock()
+		defer orderMu.Unlock()
+		order = append(order, s)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/ws" {
+			record("ws")
+			conn, err := websocket.Accept(w, r, nil)
+			require.NoError(t, err)
+			defer conn.Close(websocket.StatusNormalClosure, "")
+			data, _ := json.Marshal(Message{
+				Type: "match_ready",
+				Payload: mustMarshal(map[string]any{
+					"address":   "10.0.0.1:7777",
+					"ticket_id": int64(9),
+				}),
+			})
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_ = conn.Write(ctx, websocket.MessageText, data)
+			return
+		}
+		if r.URL.Path == "/v1/matchmaker/tickets" && r.Method == http.MethodPost {
+			record("ticket")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":         int64(9),
+				"status":     "queued",
+				"created_at": time.Now().UTC().Format(time.RFC3339Nano),
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: server.URL})
+	c.SetSession(&Session{AccessToken: "tok", RefreshToken: "rt", ExpiresAt: time.Now().Add(time.Hour)})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, err := c.Matchmaker.RequestMatch(ctx, MatchRequest{Fleet: "f", GameMode: "g"})
+	require.NoError(t, err)
+
+	orderMu.Lock()
+	defer orderMu.Unlock()
+	require.GreaterOrEqual(t, len(order), 2, "expected both ws upgrade and ticket POST")
+	assert.Equal(t, "ws", order[0],
+		"WS upgrade must happen before ticket POST — otherwise match_ready pushes race the hub registration")
+	assert.Equal(t, "ticket", order[1])
 }
 
 func TestMatchmakerService_RequestMatch_cancel_on_context(t *testing.T) {
