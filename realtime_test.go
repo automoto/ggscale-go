@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -76,6 +77,60 @@ func TestRealtimeClient_DialRealtime_no_session(t *testing.T) {
 	_, err := c.DialRealtime(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no session")
+}
+
+// Regression: a stale session must not block WS dial. callProtected
+// already refreshes on 401; DialRealtime now mirrors that behaviour so
+// RequestMatch (which dials WS first) works against an expired session
+// instead of failing on the upgrade.
+func TestRealtimeClient_DialRealtime_RefreshesAndRetriesOn401(t *testing.T) {
+	var (
+		dialAttempts    int32
+		refreshAttempts int32
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v1/auth/refresh" && r.Method == http.MethodPost:
+			atomic.AddInt32(&refreshAttempts, 1)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token":  "fresh-tok",
+				"refresh_token": "fresh-rt",
+				"end_user_id":   int64(42),
+				"expires_at":    time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano),
+			})
+		case r.URL.Path == "/v1/ws":
+			n := atomic.AddInt32(&dialAttempts, 1)
+			if n == 1 && r.Header.Get("X-Session-Token") == "stale-tok" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			conn, err := websocket.Accept(w, r, nil)
+			require.NoError(t, err)
+			conn.Close(websocket.StatusNormalClosure, "")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: server.URL})
+	c.SetSession(&Session{
+		AccessToken:  "stale-tok",
+		RefreshToken: "stale-rt",
+		ExpiresAt:    time.Now().Add(time.Hour), // not in proactive window
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	rc, err := c.DialRealtime(ctx)
+	require.NoError(t, err)
+	defer rc.Close()
+
+	assert.Equal(t, int32(2), atomic.LoadInt32(&dialAttempts),
+		"DialRealtime must retry the dial once after refreshing on 401")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&refreshAttempts),
+		"refresh must fire exactly once between the two dials")
 }
 
 func TestRealtimeClient_ReadMessage_connection_closed(t *testing.T) {

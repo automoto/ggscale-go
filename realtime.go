@@ -31,7 +31,34 @@ type RealtimeClient struct {
 // DialRealtime opens a WebSocket connection to the server's /v1/ws
 // endpoint. The connection carries the API key and current session token
 // as headers. Requires an end-user session.
+//
+// Refreshes the session proactively when it's near expiry, and retries
+// once on a 401 after a forced refresh — mirroring callProtected so
+// dialers don't fail on a stale session that the next REST call would
+// have silently refreshed.
 func (c *Client) DialRealtime(ctx context.Context) (*RealtimeClient, error) {
+	if err := c.refreshIfNeeded(ctx); err != nil {
+		return nil, err
+	}
+	rc, status, err := c.dialRealtimeOnce(ctx)
+	if err == nil {
+		return rc, nil
+	}
+	if status != http.StatusUnauthorized {
+		return nil, err
+	}
+	if rerr := c.refreshNow(ctx); rerr != nil {
+		return nil, err // surface the original 401
+	}
+	rc, _, err = c.dialRealtimeOnce(ctx)
+	return rc, err
+}
+
+// dialRealtimeOnce performs a single WS dial attempt and returns the HTTP
+// status code if the upgrade was rejected (so the caller can decide
+// whether to refresh + retry). status is 0 on success or when the failure
+// has no associated HTTP response (e.g. network error).
+func (c *Client) dialRealtimeOnce(ctx context.Context) (*RealtimeClient, int, error) {
 	baseURL := c.baseURL
 	if baseURL == "" {
 		if t, ok := c.transport.(*StdNetTransport); ok {
@@ -39,7 +66,7 @@ func (c *Client) DialRealtime(ctx context.Context) (*RealtimeClient, error) {
 		}
 	}
 	if baseURL == "" {
-		return nil, errors.New("ggscale: cannot determine WebSocket URL — set Options.BaseURL")
+		return nil, 0, errors.New("ggscale: cannot determine WebSocket URL — set Options.BaseURL")
 	}
 
 	wsURL := baseURL
@@ -51,21 +78,25 @@ func (c *Client) DialRealtime(ctx context.Context) (*RealtimeClient, error) {
 	sess := c.session
 	c.sessionMu.RUnlock()
 	if sess == nil {
-		return nil, errors.New("ggscale: no session — call Login or SetSession first")
+		return nil, 0, errors.New("ggscale: no session — call Login or SetSession first")
 	}
 
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer "+c.apiKey)
 	headers.Set("X-Session-Token", sess.AccessToken)
 
-	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+	conn, resp, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
 		HTTPHeader: headers,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("dial websocket: %w", err)
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		return nil, status, fmt.Errorf("dial websocket: %w", err)
 	}
 
-	return &RealtimeClient{conn: conn}, nil
+	return &RealtimeClient{conn: conn}, 0, nil
 }
 
 // ReadMessage blocks until the server sends a message or the context is
