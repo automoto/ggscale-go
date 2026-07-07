@@ -8,7 +8,7 @@ import (
 
 // FleetsService exposes the server-browser endpoints.
 //
-// ListServers is consumed by game clients: it takes the current end-user
+// ListServers is consumed by game clients: it takes the current player
 // session (publishable api_key + X-Session-Token) and returns the live
 // servers for the given fleet, with player counts.
 //

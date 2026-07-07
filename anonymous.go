@@ -10,10 +10,10 @@ import (
 )
 
 // AnonymousAuth authenticates via POST /v1/auth/anonymous. The server
-// creates an end_user with a random external_id on first call. When
+// creates a player with a random external_id on first call. When
 // storePath is non-empty, the session (including refresh token) is
 // persisted to disk so subsequent runs of the same game binary resume
-// the same identity instead of registering a fresh anonymous user.
+// the same identity instead of registering a fresh anonymous player.
 //
 // Wire AnonymousAuth.SaveSession to Options.OnSessionUpdate so the
 // rotated refresh token is rewritten to disk after every refresh:
@@ -87,7 +87,7 @@ func DefaultSessionPath(gameID string) string {
 type persistedSession struct {
 	AccessToken  string    `json:"access_token"`
 	RefreshToken string    `json:"refresh_token"`
-	EndUserID    int64     `json:"end_user_id"`
+	PlayerID     int64     `json:"player_id"`
 	ExpiresAt    time.Time `json:"expires_at"`
 }
 
@@ -111,7 +111,7 @@ func loadSessionFile(path string) (*Session, bool) {
 	return &Session{
 		AccessToken:  p.AccessToken,
 		RefreshToken: p.RefreshToken,
-		EndUserID:    p.EndUserID,
+		PlayerID:     p.PlayerID,
 		ExpiresAt:    p.ExpiresAt,
 	}, true
 }
@@ -126,7 +126,7 @@ func saveSessionFile(path string, s *Session) error {
 	raw, err := json.Marshal(persistedSession{ //nolint:gosec
 		AccessToken:  s.AccessToken,
 		RefreshToken: s.RefreshToken,
-		EndUserID:    s.EndUserID,
+		PlayerID:     s.PlayerID,
 		ExpiresAt:    s.ExpiresAt,
 	})
 	if err != nil {

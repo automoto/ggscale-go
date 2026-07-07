@@ -15,7 +15,7 @@ import (
 const proactiveRefreshWindow = 30 * time.Second
 
 // Client is the entry point for the ggscale Go SDK. Construct one
-// with NewClient, optionally call Login to establish an end-user
+// with NewClient, optionally call Login to establish a player
 // session, and use the service fields (Auth, Storage, Leaderboards,
 // Profile) to call the API.
 //
@@ -25,21 +25,26 @@ type Client struct {
 	// authentication strategies (signup, verify, refresh, logout).
 	Auth *AuthService
 
-	// Storage, Leaderboards, Profile are populated by their
-	// respective service files (storage.go, leaderboards.go,
-	// profile.go). They share this client's transport, API key,
-	// and auto-refresh logic.
+	// The remaining service fields are populated by their respective
+	// service files (storage.go, friends.go, …). They share this
+	// client's transport, API key, and auto-refresh logic.
 	Storage      *StorageService
 	Leaderboards *LeaderboardsService
 	Profile      *ProfileService
 	Matchmaker   *MatchmakerService
 	Relay        *RelayService
 	Fleets       *FleetsService
+	Friends      *FriendsService
+	GameSessions *GameSessionsService
+	Invites      *InvitesService
+	Presence     *PresenceService
+	Account      *AccountService
 
-	// EndUsers exposes server-tier endpoints (e.g. session-token
-	// verification) for game-server workloads. Authenticates with the
-	// API key only — no end-user session required.
-	EndUsers *EndUsersService
+	// Server exposes server-tier endpoints (player session-token
+	// verification, player remote addresses) for game-server
+	// workloads. Authenticates with the secret API key only — no
+	// player session required.
+	Server *ServerService
 
 	transport Transport
 	apiKey    string
@@ -100,7 +105,12 @@ func NewClient(opts Options) (*Client, error) {
 	c.Matchmaker = &MatchmakerService{c: c}
 	c.Relay = &RelayService{c: c}
 	c.Fleets = &FleetsService{c: c}
-	c.EndUsers = &EndUsersService{transport: t, apiKey: opts.APIKey}
+	c.Friends = &FriendsService{c: c}
+	c.GameSessions = &GameSessionsService{c: c}
+	c.Invites = &InvitesService{c: c}
+	c.Presence = &PresenceService{c: c}
+	c.Account = &AccountService{c: c}
+	c.Server = &ServerService{transport: t, apiKey: opts.APIKey}
 	return c, nil
 }
 
@@ -159,7 +169,7 @@ func (c *Client) Transport() Transport {
 	return c.transport
 }
 
-// callProtected sends a request that requires an end-user session.
+// callProtected sends a request that requires a player session.
 // Attaches the API key and session token, fires a proactive refresh
 // when the session is within the refresh window, and retries once on
 // a 401 after refreshing.

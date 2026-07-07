@@ -41,7 +41,7 @@ func TestClient_Login_populates_session_via_authenticator(t *testing.T) {
 	err = c.Login(context.Background(), NewEmailPasswordAuth(ft, "k", "e", "p"))
 	require.NoError(t, err)
 	require.NotNil(t, c.Session())
-	assert.Equal(t, int64(42), c.Session().EndUserID)
+	assert.Equal(t, int64(42), c.Session().PlayerID)
 }
 
 func TestClient_callProtected_attaches_auth_and_session_headers(t *testing.T) {
@@ -53,7 +53,7 @@ func TestClient_callProtected_attaches_auth_and_session_headers(t *testing.T) {
 	c.SetSession(&Session{
 		AccessToken:  "live-jwt",
 		RefreshToken: "rt",
-		EndUserID:    9,
+		PlayerID:     9,
 		ExpiresAt:    time.Now().Add(10 * time.Minute),
 	})
 
@@ -134,7 +134,7 @@ func TestClient_proactive_refresh_when_session_about_to_expire(t *testing.T) {
 		return 200, map[string]any{
 			"access_token":  "fresh.jwt",
 			"refresh_token": "fresh-refresh",
-			"end_user_id":   int64(1),
+			"player_id":     int64(1),
 			"expires_at":    time.Now().Add(15 * time.Minute),
 		}
 	})
@@ -180,7 +180,7 @@ func TestClient_reactive_refresh_on_401(t *testing.T) {
 		return 200, map[string]any{
 			"access_token":  "after-401.jwt",
 			"refresh_token": "rotated",
-			"end_user_id":   int64(1),
+			"player_id":     int64(1),
 			"expires_at":    time.Now().Add(15 * time.Minute),
 		}
 	})
@@ -218,7 +218,7 @@ func TestClient_second_401_after_refresh_surfaces_to_caller(t *testing.T) {
 		return 200, map[string]any{
 			"access_token":  "still-bad.jwt",
 			"refresh_token": "rt2",
-			"end_user_id":   int64(1),
+			"player_id":     int64(1),
 			"expires_at":    time.Now().Add(15 * time.Minute),
 		}
 	})
@@ -245,7 +245,7 @@ func TestClient_concurrent_refresh_fires_once(t *testing.T) {
 		return 200, map[string]any{
 			"access_token":  "shared.jwt",
 			"refresh_token": "rotated",
-			"end_user_id":   int64(1),
+			"player_id":     int64(1),
 			"expires_at":    time.Now().Add(15 * time.Minute),
 		}
 	})
@@ -279,7 +279,7 @@ func TestClient_OnSessionUpdate_fires_on_login_and_refresh(t *testing.T) {
 		return 200, map[string]any{
 			"access_token":  "login.jwt",
 			"refresh_token": "login-refresh",
-			"end_user_id":   int64(7),
+			"player_id":     int64(7),
 			"expires_at":    time.Now().Add(15 * time.Minute),
 		}
 	})
@@ -287,7 +287,7 @@ func TestClient_OnSessionUpdate_fires_on_login_and_refresh(t *testing.T) {
 		return 200, map[string]any{
 			"access_token":  "refreshed.jwt",
 			"refresh_token": "rotated-refresh",
-			"end_user_id":   int64(7),
+			"player_id":     int64(7),
 			"expires_at":    time.Now().Add(15 * time.Minute),
 		}
 	})
@@ -355,7 +355,7 @@ func TestClient_SetSession_round_trip(t *testing.T) {
 	captured := &Session{
 		AccessToken:  "restored.jwt",
 		RefreshToken: "rt",
-		EndUserID:    77,
+		PlayerID:     77,
 		ExpiresAt:    time.Now().Add(10 * time.Minute),
 	}
 	c.SetSession(captured)
@@ -363,7 +363,7 @@ func TestClient_SetSession_round_trip(t *testing.T) {
 	got := c.Session()
 	require.NotNil(t, got)
 	assert.Equal(t, "restored.jwt", got.AccessToken)
-	assert.Equal(t, int64(77), got.EndUserID)
+	assert.Equal(t, int64(77), got.PlayerID)
 
 	err := c.callProtected(context.Background(), &Request{Method: "GET", Path: "/v1/test"}, &map[string]any{})
 	require.NoError(t, err)

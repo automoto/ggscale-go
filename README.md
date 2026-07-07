@@ -1,10 +1,8 @@
 # ggscale-go
 
-Official Go client for the [ggscale](https://github.com/automoto/gg-scale) API. Covers the v1 surface used by game code: end-user authentication, per-user JSON storage, leaderboards, and profile management.
+Official Go client for the [ggscale](https://github.com/automoto/gg-scale) API. Covers the v1 surface used by game code: player authentication, per-player JSON storage, leaderboards, profiles, friends, presence, player-hosted game sessions with invites, matchmaking, real-time events, and server-tier session verification.
 
 The SDK has zero third-party runtime dependencies — just the standard library.
-
-> **Status:** v0.1, alpha. The public surface is frozen by [`docs/proposals/sdk-transport.md`](docs/proposals/sdk-transport.md). Breaking changes between v0.x tags are possible until v1.0.
 
 ## Install
 
@@ -51,26 +49,36 @@ func main() {
 
     top, _ := c.Leaderboards.Top(ctx, 1, 5)
     for _, e := range top {
-        fmt.Printf("#%d  user=%d  score=%d\n", e.Rank+1, e.EndUserID, e.Score)
+        fmt.Printf("#%d  player=%d  score=%d\n", e.Rank+1, e.PlayerID, e.Score)
     }
 }
 ```
 
 A runnable version of this lives in [`examples/quickstart/`](examples/quickstart/).
 
-## What's in v0.1
+## Services
 
 | Service | Methods |
 |---|---|
 | `Client.Auth` | `Signup`, `Verify`, `Refresh`, `Logout` |
 | `Client.Storage` | `Get`, `Put`, `Delete`, `List` (cursor-paginated, OCC via `IfMatch`) |
-| `Client.Leaderboards` | `Submit`, `Top`, `AroundMe` |
+| `Client.Leaderboards` | `Submit`, `SubmitFor`, `Top`, `AroundMe` |
 | `Client.Profile` | `Get`, `Update` |
+| `Client.Friends` | `List`, `Request`, `Accept`, `Reject`, `Remove`, `Block`, `Unblock`, `RemoteAddrs` |
+| `Client.GameSessions` | `Create`, `Get`, `Resolve`, `Join`, `Heartbeat`, `Leave` |
+| `Client.Invites` | `Create`, `List`, `Delete` |
+| `Client.Presence` | `Set` |
+| `Client.Account` | `RemoteAddrs`, `SetRemoteAddrs` |
+| `Client.Matchmaker` | `CreateTicket`, `GetTicket`, `CancelTicket`, `RequestMatch` |
+| `Client.Fleets` | `SendHeartbeat`, `ListServers` |
+| `Client.Relay` | `GetCredentials` |
+| `Client.Server` | `VerifySession`, `PlayerRemoteAddrs` (server-tier, secret API key) |
 
-Three `Authenticator` strategies for `Client.Login`:
+Four `Authenticator` strategies for `Client.Login`:
 
 - `NewEmailPasswordAuth(...)` — standard email + password
 - `NewCustomTokenAuth(...)` — tenant-signed HS256 JWT
+- `NewAnonymousAuth(...)` — anonymous player with an on-disk persisted session
 - `NewOfflineAuth()` — synthetic local session for LAN games and self-hosted installs without a central directory
 
 The `Client` is safe for concurrent use. Sessions auto-refresh: a proactive refresh fires when a session is within 30 s of expiry, and a 401 response triggers exactly one reactive refresh + retry.
@@ -118,13 +126,24 @@ Useful for game clients that reconnect across process restarts.
 ## Development
 
 ```sh
-make check       # lint + vet + test
-make test        # go test -race ./...
-make lint        # golangci-lint
-make quickstart  # GGSCALE_API_KEY=... make quickstart
+make check             # lint + vet + test
+make test              # go test -race ./...
+make test-integration  # full-stack tests against a real server (Docker)
+make lint              # golangci-lint
+make quickstart        # GGSCALE_API_KEY=... make quickstart
 ```
 
-Tests use `httptest.NewServer` and a fake `Transport`; they do not require a running ggscale server. The `quickstart` target does.
+Unit tests use `httptest.NewServer` and a fake `Transport`; they do not require a running ggscale server.
+
+### Integration tests
+
+`make test-integration` brings up a minimal stack with docker compose —
+Postgres plus `buildwrangler/ggscale:latest` pulled from Docker Hub (the
+server applies its own migrations at startup) — seeds a tenant, project,
+and API keys directly via `integration/seed.sql`, runs the
+`-tags=integration` tests in `integration_test.go` against it on
+`127.0.0.1:18080`, and tears everything down. Set `KEEP_STACK=1` to leave
+the stack running for debugging.
 
 ## License
 

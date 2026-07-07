@@ -43,7 +43,7 @@ func cannedSession() map[string]any {
 	return map[string]any{
 		"access_token":  "jwt.access.token",
 		"refresh_token": "opaque-refresh-hex",
-		"end_user_id":   int64(42),
+		"player_id":     int64(42),
 		"expires_at":    time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 }
@@ -69,7 +69,7 @@ func TestEmailPasswordAuth_Authenticate_calls_login_with_credentials(t *testing.
 
 	assert.Equal(t, "jwt.access.token", sess.AccessToken)
 	assert.Equal(t, "opaque-refresh-hex", sess.RefreshToken)
-	assert.Equal(t, int64(42), sess.EndUserID)
+	assert.Equal(t, int64(42), sess.PlayerID)
 }
 
 func TestEmailPasswordAuth_Authenticate_propagates_unauthorized(t *testing.T) {
@@ -98,7 +98,7 @@ func TestCustomTokenAuth_Authenticate_calls_custom_token(t *testing.T) {
 	body, ok := ft.gotReq.Body.(customTokenRequest)
 	require.True(t, ok)
 	assert.Equal(t, "tenant-signed-jwt", body.Token)
-	assert.Equal(t, int64(42), sess.EndUserID)
+	assert.Equal(t, int64(42), sess.PlayerID)
 }
 
 func TestOfflineAuth_returns_synthetic_session_with_no_transport(t *testing.T) {
@@ -108,13 +108,13 @@ func TestOfflineAuth_returns_synthetic_session_with_no_transport(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, sess1.AccessToken)
 	assert.Empty(t, sess1.RefreshToken)
-	assert.NotZero(t, sess1.EndUserID)
+	assert.NotZero(t, sess1.PlayerID)
 	assert.True(t, sess1.ExpiresAt.After(time.Now().Add(50*365*24*time.Hour)))
 
 	// Stable identity across calls on the same OfflineAuth instance.
 	sess2, err := a.Authenticate(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, sess1.EndUserID, sess2.EndUserID)
+	assert.Equal(t, sess1.PlayerID, sess2.PlayerID)
 	assert.Equal(t, sess1.AccessToken, sess2.AccessToken)
 }
 
@@ -123,7 +123,7 @@ func TestOfflineAuth_two_instances_get_distinct_ids(t *testing.T) {
 	b := NewOfflineAuth()
 	sa, _ := a.Authenticate(context.Background())
 	sb, _ := b.Authenticate(context.Background())
-	assert.NotEqual(t, sa.EndUserID, sb.EndUserID)
+	assert.NotEqual(t, sa.PlayerID, sb.PlayerID)
 }
 
 func TestAuthService_Signup_posts_to_signup_endpoint(t *testing.T) {
@@ -143,19 +143,20 @@ func TestAuthService_Signup_posts_to_signup_endpoint(t *testing.T) {
 func TestAuthService_Verify_returns_result(t *testing.T) {
 	ft := &fakeTransport{
 		respond: func(*Request) (any, error) {
-			return map[string]any{"end_user_id": int64(7), "verified": true}, nil
+			return map[string]any{"player_id": int64(7), "verified": true}, nil
 		},
 	}
 	svc := &AuthService{transport: ft, apiKey: "k"}
 
-	res, err := svc.Verify(context.Background(), "verify-token")
+	res, err := svc.Verify(context.Background(), "demo@example.com", "123456")
 	require.NoError(t, err)
-	assert.Equal(t, int64(7), res.EndUserID)
+	assert.Equal(t, int64(7), res.PlayerID)
 	assert.True(t, res.Verified)
 
 	body, ok := ft.gotReq.Body.(verifyRequest)
 	require.True(t, ok)
-	assert.Equal(t, "verify-token", body.Token)
+	assert.Equal(t, "demo@example.com", body.Email)
+	assert.Equal(t, "123456", body.Code)
 }
 
 func TestAuthService_Refresh_rotates_token(t *testing.T) {
@@ -164,7 +165,7 @@ func TestAuthService_Refresh_rotates_token(t *testing.T) {
 			return map[string]any{
 				"access_token":  "new.jwt",
 				"refresh_token": "rotated-refresh",
-				"end_user_id":   int64(42),
+				"player_id":     int64(42),
 				"expires_at":    time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
 			}, nil
 		},

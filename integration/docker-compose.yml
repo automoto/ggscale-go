@@ -1,0 +1,42 @@
+# Minimal stack for SDK integration tests: postgres + ggscale-server.
+# The server image applies its embedded migrations at startup, so no
+# separate migrate container is needed; scripts/integration-test.sh
+# seeds the tenant/project/API keys directly via psql once the server
+# reports healthy (healthy ⇒ migrations done).
+name: ggscale-go-it
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ggscale
+      POSTGRES_PASSWORD: ggscale
+      POSTGRES_DB: ggscale
+    volumes:
+      - ./seed.sql:/seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ggscale -d ggscale"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  ggscale:
+    image: buildwrangler/ggscale:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://ggscale:ggscale@postgres:5432/ggscale?sslmode=disable
+      CACHE_BACKEND: memory
+      HTTP_ADDR: ":8080"
+      LOG_LEVEL: info
+      # ENV=dev skips the production cross-validation (CORS, secure
+      # cookies, digest pinning) that would refuse to boot this stack.
+      ENV: dev
+      # No mail flow is exercised by the tests; noop avoids a mailhog
+      # container. The dashboard is likewise not under test.
+      MAIL_PROVIDER: noop
+      DASHBOARD_DISABLED: "true"
+    ports:
+      # 18080 so the stack can run alongside a dev server on 8080.
+      - "127.0.0.1:18080:8080"

@@ -1,4 +1,4 @@
-.PHONY: build test test-verbose lint vet vulncheck tidy quickstart
+.PHONY: build test test-verbose test-integration lint vet vulncheck tidy quickstart
 
 # Default target: run the same checks CI runs.
 .DEFAULT_GOAL := check
@@ -13,6 +13,12 @@ test:
 
 test-verbose:
 	go test -race -v ./...
+
+# Spin up postgres + ggscale (pulled from Docker Hub) via docker compose,
+# seed a tenant/project/API keys, run the -tags=integration tests, and
+# tear the stack down. KEEP_STACK=1 leaves it running for debugging.
+test-integration:
+	./scripts/integration-test.sh
 
 lint:
 	golangci-lint run

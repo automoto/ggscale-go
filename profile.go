@@ -12,8 +12,8 @@ type ProfileService struct {
 	c *Client
 }
 
-// Profile is the calling end-user's profile. EmailVerifiedAt is nil
-// until the user confirms their email; the SDK distinguishes
+// Profile is the calling player's profile. EmailVerifiedAt is nil
+// until the player confirms their email; the SDK distinguishes
 // "unverified" from a zero time so callers can branch on a real
 // nil check.
 type Profile struct {
@@ -21,15 +21,17 @@ type Profile struct {
 	ProjectID       int64      `json:"project_id"`
 	ExternalID      string     `json:"external_id"`
 	Email           string     `json:"email,omitempty"`
+	XUID            string     `json:"xuid,omitempty"`
 	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 }
 
-// ProfilePatch is the body of a PATCH /v1/profile call. Email is a
-// pointer so the SDK can distinguish "leave alone" from "set to
-// empty"; the server currently rejects empty patches with 400.
+// ProfilePatch is the body of a PATCH /v1/profile call. Fields are
+// pointers so the SDK can distinguish "leave alone" from "set to
+// empty"; the server rejects empty patches with 400.
 type ProfilePatch struct {
 	Email *string `json:"email,omitempty"`
+	XUID  *string `json:"xuid,omitempty"`
 }
 
 // Get returns the calling end-user's profile.

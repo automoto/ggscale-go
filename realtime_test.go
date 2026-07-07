@@ -96,7 +96,7 @@ func TestRealtimeClient_DialRealtime_RefreshesAndRetriesOn401(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"access_token":  "fresh-tok",
 				"refresh_token": "fresh-rt",
-				"end_user_id":   int64(42),
+				"player_id":     int64(42),
 				"expires_at":    time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano),
 			})
 		case r.URL.Path == "/v1/ws":

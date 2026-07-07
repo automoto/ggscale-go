@@ -102,7 +102,7 @@ func (s *StorageService) Delete(ctx context.Context, key string) error {
 	}, nil)
 }
 
-// List paginates through the calling end-user's objects, oldest first.
+// List paginates through the calling player's objects, oldest first.
 // Filter by key prefix via opts.KeyPrefix. Loop until NextCursor is
 // empty.
 func (s *StorageService) List(ctx context.Context, opts ListOptions) (*ObjectPage, error) {

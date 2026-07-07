@@ -22,6 +22,7 @@ func TestProfile_Get_decodes_full_response(t *testing.T) {
 				"project_id":        7,
 				"external_id":       "ext-abc",
 				"email":             "demo@example.com",
+				"xuid":              "xuid-123",
 				"email_verified_at": verified.Format(time.RFC3339),
 				"created_at":        created.Format(time.RFC3339),
 			}, nil
@@ -37,6 +38,7 @@ func TestProfile_Get_decodes_full_response(t *testing.T) {
 	assert.Equal(t, int64(7), p.ProjectID)
 	assert.Equal(t, "ext-abc", p.ExternalID)
 	assert.Equal(t, "demo@example.com", p.Email)
+	assert.Equal(t, "xuid-123", p.XUID)
 	require.NotNil(t, p.EmailVerifiedAt)
 	assert.True(t, p.EmailVerifiedAt.Equal(verified))
 	assert.True(t, p.CreatedAt.Equal(created))
@@ -75,6 +77,21 @@ func TestProfile_Update_sends_patch_with_email(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, body.Email)
 	assert.Equal(t, "new@example.com", *body.Email)
+}
+
+func TestProfile_Update_sends_patch_with_xuid(t *testing.T) {
+	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
+	c := newClientWithFake(t, ft)
+
+	xuid := "xuid-456"
+	err := c.Profile.Update(context.Background(), ProfilePatch{XUID: &xuid})
+	require.NoError(t, err)
+
+	body, ok := ft.gotReq.Body.(ProfilePatch)
+	require.True(t, ok)
+	require.NotNil(t, body.XUID)
+	assert.Equal(t, "xuid-456", *body.XUID)
+	assert.Nil(t, body.Email)
 }
 
 func TestProfile_Update_empty_patch_400_returns_ErrBadRequest(t *testing.T) {

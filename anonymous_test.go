@@ -54,7 +54,7 @@ func TestAnonymousAuth_persists_first_session_and_reads_back_on_second_call(t *t
 	assert.Equal(t, 1, ft.callCount, "second Authenticate must use the persisted file, not the API")
 	assert.Equal(t, first.AccessToken, second.AccessToken)
 	assert.Equal(t, first.RefreshToken, second.RefreshToken)
-	assert.Equal(t, first.EndUserID, second.EndUserID)
+	assert.Equal(t, first.PlayerID, second.PlayerID)
 }
 
 func TestAnonymousAuth_empty_storePath_never_touches_disk(t *testing.T) {
@@ -94,7 +94,7 @@ func TestAnonymousAuth_persisted_file_without_refresh_token_falls_back(t *testin
 	// Write a syntactically-valid file with no refresh token. We can't
 	// recover without it, so AnonymousAuth must mint a fresh identity.
 	raw, _ := json.Marshal(persistedSession{
-		AccessToken: "stale", EndUserID: 1, ExpiresAt: time.Now().Add(time.Hour),
+		AccessToken: "stale", PlayerID: 1, ExpiresAt: time.Now().Add(time.Hour),
 	})
 	require.NoError(t, os.WriteFile(path, raw, 0o600))
 
@@ -135,7 +135,7 @@ func TestAnonymousAuth_SaveSession_writes_to_storePath(t *testing.T) {
 	a.SaveSession(&Session{
 		AccessToken:  "rotated.access",
 		RefreshToken: "rotated.refresh",
-		EndUserID:    99,
+		PlayerID:     99,
 		ExpiresAt:    time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
 	})
 
@@ -143,7 +143,7 @@ func TestAnonymousAuth_SaveSession_writes_to_storePath(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "rotated.access", loaded.AccessToken)
 	assert.Equal(t, "rotated.refresh", loaded.RefreshToken)
-	assert.Equal(t, int64(99), loaded.EndUserID)
+	assert.Equal(t, int64(99), loaded.PlayerID)
 }
 
 func TestAnonymousAuth_SaveSession_is_noop_with_empty_path(t *testing.T) {

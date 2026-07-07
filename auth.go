@@ -23,7 +23,7 @@ type Authenticator interface {
 type Session struct {
 	AccessToken  string
 	RefreshToken string
-	EndUserID    int64
+	PlayerID     int64
 	ExpiresAt    time.Time
 }
 
@@ -38,8 +38,8 @@ type AuthService struct {
 // VerifyResult is returned by AuthService.Verify after a successful
 // email-verification round trip.
 type VerifyResult struct {
-	EndUserID int64 `json:"end_user_id"`
-	Verified  bool  `json:"verified"`
+	PlayerID int64 `json:"player_id"`
+	Verified bool  `json:"verified"`
 }
 
 type signupRequest struct {
@@ -57,7 +57,8 @@ type customTokenRequest struct {
 }
 
 type verifyRequest struct {
-	Token string `json:"token"`
+	Email string `json:"email"`
+	Code  string `json:"code"`
 }
 
 type refreshRequest struct {
@@ -67,7 +68,7 @@ type refreshRequest struct {
 type sessionResponse struct {
 	AccessToken  string    `json:"access_token"`
 	RefreshToken string    `json:"refresh_token"`
-	EndUserID    int64     `json:"end_user_id"`
+	PlayerID     int64     `json:"player_id"`
 	ExpiresAt    time.Time `json:"expires_at"`
 }
 
@@ -75,14 +76,14 @@ func (r *sessionResponse) toSession() *Session {
 	return &Session{
 		AccessToken:  r.AccessToken,
 		RefreshToken: r.RefreshToken,
-		EndUserID:    r.EndUserID,
+		PlayerID:     r.PlayerID,
 		ExpiresAt:    r.ExpiresAt,
 	}
 }
 
-// Signup registers a new end-user. The server sends a verification
-// email and returns 202; call Verify with the token from the email
-// before the user can log in.
+// Signup registers a new player. The server sends a verification
+// email and returns 202; call Verify with the code from the email
+// before the player can log in.
 func (a *AuthService) Signup(ctx context.Context, email, password string) error {
 	return a.transport.Call(ctx, &Request{
 		Method: http.MethodPost,
@@ -92,15 +93,15 @@ func (a *AuthService) Signup(ctx context.Context, email, password string) error 
 	}, nil)
 }
 
-// Verify completes email verification using the token mailed to the
-// user during signup.
-func (a *AuthService) Verify(ctx context.Context, token string) (*VerifyResult, error) {
+// Verify completes email verification using the code mailed to the
+// player during signup.
+func (a *AuthService) Verify(ctx context.Context, email, code string) (*VerifyResult, error) {
 	var res VerifyResult
 	err := a.transport.Call(ctx, &Request{
 		Method: http.MethodPost,
 		Path:   "/v1/auth/verify",
 		APIKey: a.apiKey,
-		Body:   verifyRequest{Token: token},
+		Body:   verifyRequest{Email: email, Code: code},
 	}, &res)
 	if err != nil {
 		return nil, err
@@ -195,7 +196,7 @@ func (a *CustomTokenAuth) Authenticate(ctx context.Context) (*Session, error) {
 
 // OfflineAuth returns a synthetic local session and never calls the
 // API. Intended for LAN parties and self-hosted installs without a
-// central directory. The EndUserID is a per-process random int64;
+// central directory. The PlayerID is a per-process random int64;
 // persistence is out of scope.
 type OfflineAuth struct {
 	session *Session
@@ -212,7 +213,7 @@ func NewOfflineAuth() *OfflineAuth {
 		// does, there's nothing useful to do here.
 		panic("ggscale: crypto/rand failed: " + err.Error())
 	}
-	// Mask the sign bit so EndUserID is always positive.
+	// Mask the sign bit so PlayerID is always positive.
 	id := int64(binary.BigEndian.Uint64(b[:]) & 0x7fffffffffffffff)
 
 	var tokBytes [16]byte
@@ -222,7 +223,7 @@ func NewOfflineAuth() *OfflineAuth {
 	return &OfflineAuth{
 		session: &Session{
 			AccessToken: "offline-" + hex.EncodeToString(tokBytes[:]),
-			EndUserID:   id,
+			PlayerID:    id,
 			ExpiresAt:   time.Now().Add(100 * 365 * 24 * time.Hour),
 		},
 	}

@@ -56,6 +56,6 @@ func main() {
 		log.Fatalf("top: %v", err)
 	}
 	for _, e := range top {
-		fmt.Printf("#%d  user=%d  score=%d\n", e.Rank+1, e.EndUserID, e.Score)
+		fmt.Printf("#%d  player=%d  score=%d\n", e.Rank+1, e.PlayerID, e.Score)
 	}
 }

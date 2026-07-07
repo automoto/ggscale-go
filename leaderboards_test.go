@@ -29,9 +29,9 @@ func TestLeaderboards_Top_returns_entries(t *testing.T) {
 		respond: func(*Request) (any, error) {
 			return map[string]any{
 				"entries": []map[string]any{
-					{"end_user_id": 1, "score": 9000, "rank": 0},
-					{"end_user_id": 2, "score": 8000, "rank": 1},
-					{"end_user_id": 3, "score": 7000, "rank": 2},
+					{"player_id": 1, "score": 9000, "rank": 0},
+					{"player_id": 2, "score": 8000, "rank": 1},
+					{"player_id": 3, "score": 7000, "rank": 2},
 				},
 			}, nil
 		},
@@ -84,8 +84,8 @@ func TestLeaderboards_AroundMe_with_entries(t *testing.T) {
 		respond: func(*Request) (any, error) {
 			return map[string]any{
 				"entries": []map[string]any{
-					{"end_user_id": 1, "score": 100, "rank": 4},
-					{"end_user_id": 7, "score": 90, "rank": 5},
+					{"player_id": 1, "score": 100, "rank": 4},
+					{"player_id": 7, "score": 90, "rank": 5},
 				},
 				"self_rank": 5,
 			}, nil
@@ -97,7 +97,7 @@ func TestLeaderboards_AroundMe_with_entries(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Entries, 2)
 	assert.Equal(t, int64(5), res.SelfRank)
-	assert.Equal(t, int64(7), res.Entries[1].EndUserID)
+	assert.Equal(t, int64(7), res.Entries[1].PlayerID)
 }
 
 func TestLeaderboards_SubmitFor_uses_supplied_session_token(t *testing.T) {

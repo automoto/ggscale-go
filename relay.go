@@ -22,7 +22,7 @@ type Credentials struct {
 }
 
 // GetCredentials returns a fresh TURN credential pair scoped to the
-// current end-user. Requires an end-user session.
+// current player. Requires a player session.
 func (r *RelayService) GetCredentials(ctx context.Context) (*Credentials, error) {
 	var creds Credentials
 	err := r.c.callProtected(ctx, &Request{

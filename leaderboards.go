@@ -16,9 +16,9 @@ type LeaderboardsService struct {
 // Entry is one row of a leaderboard. Rank is 0-based and matches the
 // server's ordering (lower is better).
 type Entry struct {
-	EndUserID int64 `json:"end_user_id"`
-	Score     int64 `json:"score"`
-	Rank      int64 `json:"rank"`
+	PlayerID int64 `json:"player_id"`
+	Score    int64 `json:"score"`
+	Rank     int64 `json:"rank"`
 }
 
 // AroundMeResult is the response from AroundMe. SelfRank is -1 when
@@ -36,7 +36,7 @@ type entriesResponse struct {
 	Entries []Entry `json:"entries"`
 }
 
-// Submit posts a score for the calling end-user. Each call inserts a
+// Submit posts a score for the calling player. Each call inserts a
 // new row; the server keeps the player's best score for ranking
 // purposes.
 //

@@ -20,7 +20,7 @@ func liveSession() *Session {
 	return &Session{
 		AccessToken:  "test-jwt",
 		RefreshToken: "rt",
-		EndUserID:    1,
+		PlayerID:     1,
 		ExpiresAt:    time.Now().Add(1 * time.Hour),
 	}
 }

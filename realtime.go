@@ -30,7 +30,7 @@ type RealtimeClient struct {
 
 // DialRealtime opens a WebSocket connection to the server's /v1/ws
 // endpoint. The connection carries the API key and current session token
-// as headers. Requires an end-user session.
+// as headers. Requires a player session.
 //
 // Refreshes the session proactively when it's near expiry, and retries
 // once on a 401 after a forced refresh — mirroring callProtected so

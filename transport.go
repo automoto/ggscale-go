@@ -33,7 +33,7 @@ type Request struct {
 	Query        url.Values // optional
 	Body         any        // optional, marshalled with encoding/json
 	APIKey       string     // required
-	SessionToken string     // optional; set for end-user routes
+	SessionToken string     // optional; set for player routes
 	IfMatch      string     // optional; only storage.Put uses it
 }
 

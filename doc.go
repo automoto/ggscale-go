@@ -1,7 +1,9 @@
 // Package ggscale is the official Go client for the ggscale API. It
-// covers the v1 surface needed by game code: end-user authentication,
-// per-user JSON storage, leaderboards, profile management, matchmaking,
-// real-time WebSocket events, and TURN relay credentials.
+// covers the v1 surface needed by game code: player authentication,
+// per-player JSON storage, leaderboards, profile management, friends
+// and presence, player-hosted game sessions with invites, matchmaking,
+// real-time WebSocket events, TURN relay credentials, and server-tier
+// player-session verification.
 //
 // Start with NewClient, then call Login with one of the supplied
 // Authenticator implementations:
