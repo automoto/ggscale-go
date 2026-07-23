@@ -18,7 +18,7 @@ import (
 )
 
 func TestRealtimeClient_ReadMessage(t *testing.T) {
-	msg := Message{Type: "match_ready", Payload: mustMarshal(map[string]any{
+	msg := Message{Type: "matchmaker_matched", Payload: mustMarshal(map[string]any{
 		"address":   "10.0.0.1:7777",
 		"ticket_id": int64(7),
 	})}
@@ -51,7 +51,7 @@ func TestRealtimeClient_ReadMessage(t *testing.T) {
 
 	got, err := rc.ReadMessage(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, "match_ready", got.Type)
+	assert.Equal(t, "matchmaker_matched", got.Type)
 
 	var payload struct {
 		Address  string `json:"address"`
@@ -211,7 +211,7 @@ func TestMatchmakerService_RequestMatch(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 
 			data, _ := json.Marshal(Message{
-				Type: "match_ready",
+				Type: "matchmaker_matched",
 				Payload: mustMarshal(map[string]any{
 					"address":   "192.168.1.100:7777",
 					"ticket_id": int64(7),
@@ -262,7 +262,7 @@ func TestMatchmakerService_RequestMatch_DialsWSBeforePostingTicket(t *testing.T)
 			require.NoError(t, err)
 			defer conn.Close(websocket.StatusNormalClosure, "")
 			data, _ := json.Marshal(Message{
-				Type: "match_ready",
+				Type: "matchmaker_matched",
 				Payload: mustMarshal(map[string]any{
 					"address":   "10.0.0.1:7777",
 					"ticket_id": int64(9),
@@ -302,6 +302,57 @@ func TestMatchmakerService_RequestMatch_DialsWSBeforePostingTicket(t *testing.T)
 	assert.Equal(t, "ws", order[0],
 		"WS upgrade must happen before ticket POST — otherwise match_ready pushes race the hub registration")
 	assert.Equal(t, "ticket", order[1])
+}
+
+// Regression: a lightweight matchmaker_matched push (only ticket_id) must not
+// become the authoritative result. WaitForMatch treats the push as a settle
+// signal and reads the ticket for the full result (mode, host, roster).
+func TestMatchmakerService_WaitForMatch_push_triggers_authoritative_read(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v1/matchmaker/tickets" && r.Method == http.MethodPost:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": int64(7), "status": "queued",
+				"created_at": time.Now().UTC().Format(time.RFC3339Nano),
+			})
+		case r.URL.Path == "/v1/matchmaker/tickets/7" && r.Method == http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": int64(7), "status": "matched", "mode": "game_session",
+				"match_id": "mm_room", "session_id": "gs_9", "host_player_id": int64(41),
+				"created_at": time.Now().UTC().Format(time.RFC3339Nano),
+				"users":      []any{map[string]any{"player_id": int64(41)}, map[string]any{"player_id": int64(42)}},
+			})
+		case r.URL.Path == "/v1/ws":
+			conn, err := websocket.Accept(w, r, nil)
+			require.NoError(t, err)
+			defer conn.Close(websocket.StatusNormalClosure, "")
+			data, _ := json.Marshal(Message{
+				Type:    "matchmaker_matched",
+				Payload: mustMarshal(map[string]any{"ticket_id": int64(7)}), // lightweight push
+			})
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_ = conn.Write(ctx, websocket.MessageText, data)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	c, _ := NewClient(Options{APIKey: "k", BaseURL: server.URL})
+	c.SetSession(&Session{AccessToken: "tok", RefreshToken: "rt", ExpiresAt: time.Now().Add(time.Hour)})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	res, err := c.Matchmaker.WaitForMatch(ctx, MatchRequest{Mode: ModeGameSession})
+	require.NoError(t, err)
+	assert.Equal(t, "game_session", res.Mode, "full result must come from the ticket read, not the lightweight push")
+	assert.Equal(t, int64(41), res.HostPlayerID)
+	assert.Equal(t, "gs_9", res.SessionID)
+	require.Len(t, res.Users, 2)
 }
 
 func TestMatchmakerService_RequestMatch_cancel_on_context(t *testing.T) {

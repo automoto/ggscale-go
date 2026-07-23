@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	userAgent      = "ggscale-go/0.1"
+	userAgent      = "ggscale-go/0.3.0"
 	defaultTimeout = 30 * time.Second
 )
 
@@ -106,15 +106,24 @@ func (t *StdNetTransport) client() *http.Client {
 	return t.defaultClient
 }
 
-// errBody is the JSON envelope ggscale-server returns for some errors.
-// All fields are optional; parseError only populates *Error fields it
-// can read.
+// errBody is the JSON error envelope ggscale-server returns. It covers both
+// the canonical Huma problem-details shape (title/detail/errors, plus a
+// stable code extension where emitted) and the legacy error/message envelope
+// still used by a few middleware writers. All fields are optional; parseError
+// only populates *Error fields it can read.
 type errBody struct {
-	Error             string `json:"error"`
-	Message           string `json:"message"`
-	RetryAfterSeconds int    `json:"retry_after_seconds"`
-	Version           int64  `json:"version"`
-	CurrentVersion    int64  `json:"current_version"`
+	// Huma problem+json.
+	Title  string        `json:"title"`
+	Detail string        `json:"detail"`
+	Code   string        `json:"code"`
+	Errors []ErrorDetail `json:"errors"`
+	// Legacy envelope.
+	Error   string `json:"error"`
+	Message string `json:"message"`
+
+	RetryAfterSeconds int   `json:"retry_after_seconds"`
+	Version           int64 `json:"version"`
+	CurrentVersion    int64 `json:"current_version"`
 }
 
 func parseError(resp *http.Response, body []byte) error {
@@ -122,8 +131,14 @@ func parseError(resp *http.Response, body []byte) error {
 
 	var parsed errBody
 	if len(body) > 0 && json.Unmarshal(body, &parsed) == nil {
-		e.Code = parsed.Error
-		e.Message = parsed.Message
+		// Prefer the problem-details fields, falling back to the legacy
+		// envelope. `code` is the stable machine-readable identifier (e.g.
+		// "ticket_already_active", "rate_limit_exceeded"); `detail` (or the
+		// legacy `message`) is the human-readable explanation. Match on Code,
+		// surface Message to humans.
+		e.Code = firstNonEmpty(parsed.Code, parsed.Error)
+		e.Message = firstNonEmpty(parsed.Detail, parsed.Message, parsed.Title)
+		e.Details = parsed.Errors
 		if parsed.Version > 0 {
 			e.ConflictVersion = parsed.Version
 		} else if parsed.CurrentVersion > 0 {
@@ -145,6 +160,16 @@ func parseError(resp *http.Response, body []byte) error {
 	}
 
 	return e
+}
+
+// firstNonEmpty returns the first non-empty string in vs, or "".
+func firstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // Compile-time check.

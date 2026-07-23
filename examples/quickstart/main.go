@@ -1,7 +1,7 @@
 // Quickstart is a ~50-line tour of the ggscale Go SDK: signup, login,
 // score submit, top-N read. Run against a local `make up` stack:
 //
-//	export GGSCALE_API_KEY=<key from the dashboard>
+//	export GGSCALE_API_KEY=<key from the control panel>
 //	cd sdk-go && go run ./examples/quickstart
 //
 // See ../../docs/SMOKE_TESTS.md §3 for the manual email-verification

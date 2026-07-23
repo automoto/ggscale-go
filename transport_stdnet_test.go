@@ -68,7 +68,7 @@ func TestStdNetTransport_Call_sends_headers_body_and_decodes_response(t *testing
 	assert.Equal(t, "jwt-abc", gotSession)
 	assert.Equal(t, "7", gotIfMatch)
 	assert.Equal(t, "application/json", gotCT)
-	assert.Equal(t, "ggscale-go/0.1", gotUA)
+	assert.Equal(t, "ggscale-go/0.3.0", gotUA)
 	assert.Equal(t, "world", gotBody.Hello)
 	assert.Equal(t, "world", out.Got)
 }
@@ -179,6 +179,25 @@ func TestStdNetTransport_Call_error_mapping(t *testing.T) {
 			status:  http.StatusBadRequest,
 			body:    `{"error":"invalid_payload"}`,
 			wantErr: ggscale.ErrBadRequest,
+		},
+		{
+			name:    "400 problem-details detail becomes Message",
+			status:  http.StatusBadRequest,
+			body:    `{"title":"Bad Request","status":400,"detail":"attributes must be valid JSON"}`,
+			wantErr: ggscale.ErrBadRequest,
+			check: func(t *testing.T, e *ggscale.Error) {
+				assert.Equal(t, "attributes must be valid JSON", e.Message)
+			},
+		},
+		{
+			name:    "409 ticket_already_active problem-details",
+			status:  http.StatusConflict,
+			body:    `{"title":"Conflict","status":409,"detail":"ticket_already_active","errors":[{"message":"player already has an active matchmaking ticket in this project","location":"active_ticket_id","value":55}]}`,
+			wantErr: ggscale.ErrTicketActive,
+			check: func(t *testing.T, e *ggscale.Error) {
+				assert.Equal(t, "ticket_already_active", e.Message)
+				assert.Equal(t, int64(55), e.ActiveTicketID())
+			},
 		},
 	}
 

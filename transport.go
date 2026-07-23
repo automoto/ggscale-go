@@ -2,6 +2,7 @@ package ggscale
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -47,6 +48,34 @@ type Error struct {
 	Message         string
 	RetryAfter      time.Duration
 	ConflictVersion int64
+	// Details holds the problem-details `errors` array when present. The
+	// 409 ticket_already_active response, for example, carries one entry
+	// with Location "active_ticket_id".
+	Details []ErrorDetail
+}
+
+// ErrorDetail is one entry from a problem-details `errors` array — a
+// validation failure or a structured extension. Value is the raw JSON of
+// the offending/related value.
+type ErrorDetail struct {
+	Message  string          `json:"message"`
+	Location string          `json:"location"`
+	Value    json.RawMessage `json:"value"`
+}
+
+// ActiveTicketID returns the id of the ticket already queued when this error
+// is a 409 ticket_already_active conflict, or 0 otherwise.
+func (e *Error) ActiveTicketID() int64 {
+	for _, d := range e.Details {
+		if d.Location != "active_ticket_id" {
+			continue
+		}
+		var id int64
+		if json.Unmarshal(d.Value, &id) == nil {
+			return id
+		}
+	}
+	return 0
 }
 
 func (e *Error) Error() string {
@@ -76,6 +105,12 @@ func (e *Error) Is(target error) bool {
 		return e.Status == http.StatusTooManyRequests
 	case ErrBadRequest:
 		return e.Status == http.StatusBadRequest
+	case ErrTicketActive:
+		// The stable identifier lives in the machine-readable `code`
+		// extension; fall back to Message for the legacy envelope, which
+		// carried it there.
+		return e.Status == http.StatusConflict &&
+			(e.Code == "ticket_already_active" || e.Message == "ticket_already_active")
 	}
 	return false
 }
@@ -89,4 +124,8 @@ var (
 	ErrConflict     = errors.New("ggscale: conflict")
 	ErrRateLimited  = errors.New("ggscale: rate limited")
 	ErrBadRequest   = errors.New("ggscale: bad request")
+	// ErrTicketActive is the 409 returned by matchmaker CreateTicket when the
+	// player already has an active ticket in the project. Read the active
+	// ticket id with (*Error).ActiveTicketID.
+	ErrTicketActive = errors.New("ggscale: player already has an active matchmaking ticket")
 )

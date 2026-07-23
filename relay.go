@@ -3,6 +3,7 @@ package ggscale
 import (
 	"context"
 	"net/http"
+	"net/url"
 )
 
 // RelayService exposes the /v1/relay/credentials endpoint. Reach it via
@@ -21,15 +22,38 @@ type Credentials struct {
 	URLs     []string `json:"urls,omitempty"`
 }
 
-// GetCredentials returns a fresh TURN credential pair scoped to the
-// current player. Requires a player session.
-func (r *RelayService) GetCredentials(ctx context.Context) (*Credentials, error) {
-	var creds Credentials
-	err := r.c.callProtected(ctx, &Request{
+// RelayOption configures a relay credential request.
+type RelayOption func(*relayOptions)
+
+type relayOptions struct {
+	matchID string
+}
+
+// WithMatch scopes the credential request to a match: the server verifies the
+// caller is in that match's roster before issuing (403 otherwise). Use it
+// after matchmaking so relay credential requests are authorized against a real
+// match. Unqualified requests remain valid for non-matchmade peer-to-peer.
+func WithMatch(matchID string) RelayOption {
+	return func(o *relayOptions) { o.matchID = matchID }
+}
+
+// GetCredentials returns a fresh TURN credential pair scoped to the current
+// player. Requires a player session. Pass WithMatch to additionally prove
+// membership of a match.
+func (r *RelayService) GetCredentials(ctx context.Context, opts ...RelayOption) (*Credentials, error) {
+	var o relayOptions
+	for _, fn := range opts {
+		fn(&o)
+	}
+	req := &Request{
 		Method: http.MethodPost,
 		Path:   "/v1/relay/credentials",
-	}, &creds)
-	if err != nil {
+	}
+	if o.matchID != "" {
+		req.Query = url.Values{"match_id": {o.matchID}}
+	}
+	var creds Credentials
+	if err := r.c.callProtected(ctx, req, &creds); err != nil {
 		return nil, err
 	}
 	return &creds, nil

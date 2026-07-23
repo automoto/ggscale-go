@@ -35,7 +35,7 @@ tidy:
 
 # Run the quickstart against a ggscale-server reachable at $$BASE
 # (default http://localhost:8080). Requires GGSCALE_API_KEY set to a
-# key minted via the dashboard.
+# key minted via the control panel.
 quickstart:
 	@test -n "$$GGSCALE_API_KEY" || (echo "GGSCALE_API_KEY must be set" && exit 1)
 	go run ./examples/quickstart

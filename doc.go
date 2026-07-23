@@ -13,10 +13,16 @@
 //	    APIKey:  os.Getenv("GGSCALE_API_KEY"),
 //	})
 //	_ = c.Login(ctx, ggscale.NewEmailPasswordAuth(c.Transport(), apiKey, email, password))
-//	ready, _ := c.Matchmaker.RequestMatch(ctx, ggscale.MatchRequest{
-//	    Fleet: "docker-default", GameMode: "deathmatch",
+//	res, _ := c.Matchmaker.WaitForMatch(ctx, ggscale.MatchRequest{
+//	    Mode: ggscale.ModeGameSession, GameMode: "deathmatch",
+//	    MinCount: 2, MaxCount: 4,
 //	})
-//	fmt.Println(ready.Address)
+//	fmt.Println(res.HostPlayerID, res.SessionID, res.Users)
+//
+// WaitForMatch combines the realtime push with polling recovery, so a
+// dropped WebSocket still returns the persisted match. For peer-to-peer
+// modes ConnectP2P additionally gathers TURN relay credentials and joins
+// the game session so peers can discover each other's endpoints.
 //
 // The package is safe for concurrent use. Sessions auto-refresh
 // behind the scenes; callers who need to persist a session across

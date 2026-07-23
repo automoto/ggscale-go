@@ -34,9 +34,9 @@ services:
       # cookies, digest pinning) that would refuse to boot this stack.
       ENV: dev
       # No mail flow is exercised by the tests; noop avoids a mailhog
-      # container. The dashboard is likewise not under test.
+      # container. The control panel is likewise not under test.
       MAIL_PROVIDER: noop
-      DASHBOARD_DISABLED: "true"
+      CONTROL_PANEL_DISABLED: "true"
     ports:
       # 18080 so the stack can run alongside a dev server on 8080.
       - "127.0.0.1:18080:8080"

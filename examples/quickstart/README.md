@@ -4,7 +4,7 @@ A ~50-line tour of the ggscale Go SDK.
 
 ```sh
 make up                                  # in repo root
-export GGSCALE_API_KEY=<key from dashboard>
+export GGSCALE_API_KEY=<key from control panel>
 cd sdk-go && go run ./examples/quickstart
 ```
 

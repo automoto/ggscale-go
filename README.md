@@ -69,7 +69,7 @@ A runnable version of this lives in [`examples/quickstart/`](examples/quickstart
 | `Client.Invites` | `Create`, `List`, `Delete` |
 | `Client.Presence` | `Set` |
 | `Client.Account` | `RemoteAddrs`, `SetRemoteAddrs` |
-| `Client.Matchmaker` | `CreateTicket`, `GetTicket`, `CancelTicket`, `RequestMatch` |
+| `Client.Matchmaker` | `CreateTicket`, `GetTicket`, `CancelTicket`, `WaitForMatch`, `ConnectP2P` |
 | `Client.Fleets` | `SendHeartbeat`, `ListServers` |
 | `Client.Relay` | `GetCredentials` |
 | `Client.Server` | `VerifySession`, `PlayerRemoteAddrs` (server-tier, secret API key) |
