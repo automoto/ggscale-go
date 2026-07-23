@@ -68,7 +68,7 @@ func TestStdNetTransport_Call_sends_headers_body_and_decodes_response(t *testing
 	assert.Equal(t, "jwt-abc", gotSession)
 	assert.Equal(t, "7", gotIfMatch)
 	assert.Equal(t, "application/json", gotCT)
-	assert.Equal(t, "ggscale-go/0.3.0", gotUA)
+	assert.Equal(t, "ggscale-go/"+ggscale.Version, gotUA)
 	assert.Equal(t, "world", gotBody.Hello)
 	assert.Equal(t, "world", out.Got)
 }
@@ -187,6 +187,19 @@ func TestStdNetTransport_Call_error_mapping(t *testing.T) {
 			wantErr: ggscale.ErrBadRequest,
 			check: func(t *testing.T, e *ggscale.Error) {
 				assert.Equal(t, "attributes must be valid JSON", e.Message)
+			},
+		},
+		{
+			// Real Huma validation shape captured from ggscale v0.9.0.
+			name:    "422 validation error with field details",
+			status:  http.StatusUnprocessableEntity,
+			body:    `{"title":"Unprocessable Entity","status":422,"detail":"validation failed","errors":[{"message":"expected length >= 1","location":"body.status","value":""}]}`,
+			wantErr: ggscale.ErrValidation,
+			check: func(t *testing.T, e *ggscale.Error) {
+				assert.Equal(t, "validation failed", e.Message)
+				require.NotEmpty(t, e.Details)
+				assert.Equal(t, "body.status", e.Details[0].Location)
+				assert.Equal(t, "expected length >= 1", e.Details[0].Message)
 			},
 		},
 		{

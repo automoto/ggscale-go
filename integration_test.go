@@ -196,27 +196,31 @@ func TestIntegration_Storage_CRUD_and_OCC(t *testing.T) {
 	page, err := c.Storage.List(ctx, ggscale.ListOptions{})
 	require.NoError(t, err)
 	require.Len(t, page.Items, 1)
+	// List returns metadata only: key/version/updated_at/size_bytes, no value.
 	assert.Equal(t, "settings", page.Items[0].Key)
+	assert.Positive(t, page.Items[0].SizeBytes, "list item reports the stored value size")
+	assert.Positive(t, page.Items[0].Version)
 
 	require.NoError(t, c.Storage.Delete(ctx, "settings"))
 	_, err = c.Storage.Get(ctx, "settings")
 	assert.True(t, errors.Is(err, ggscale.ErrNotFound))
 }
 
-func TestIntegration_Leaderboards_SubmitFor_Top_AroundMe(t *testing.T) {
+func TestIntegration_Leaderboards_SubmitScore_Top_AroundMe(t *testing.T) {
 	ctx := context.Background()
 	player := newPlayerClient(t)
 	server := newServerClient(t)
 	playerID := player.Session().PlayerID
+	token := player.Session().AccessToken
 
-	// Submission is secret-key-only: the publishable client is refused.
-	err := player.Leaderboards.Submit(ctx, seededLeaderboardID, 1500)
+	// Submission is secret-key-only: a publishable-key caller is refused,
+	// even via the server-tier method.
+	err := player.Server.SubmitScore(ctx, token, seededLeaderboardID, 1500)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ggscale.ErrForbidden))
 
-	// The trusted server submits on the player's behalf.
-	token := player.Session().AccessToken
-	require.NoError(t, server.Leaderboards.SubmitFor(ctx, token, seededLeaderboardID, 1500))
+	// The trusted (secret-key) server submits on the player's behalf.
+	require.NoError(t, server.Server.SubmitScore(ctx, token, seededLeaderboardID, 1500))
 
 	top, err := player.Leaderboards.Top(ctx, seededLeaderboardID, 100)
 	require.NoError(t, err)
@@ -241,9 +245,15 @@ func TestIntegration_Presence_Set(t *testing.T) {
 
 	require.NoError(t, c.Presence.Set(ctx, "online", nil))
 
+	// An empty status fails Huma field validation → 422 with the offending
+	// field named in Error.Details.
 	err := c.Presence.Set(ctx, "", nil)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ggscale.ErrBadRequest))
+	assert.True(t, errors.Is(err, ggscale.ErrValidation))
+	var sdkErr *ggscale.Error
+	require.ErrorAs(t, err, &sdkErr)
+	require.NotEmpty(t, sdkErr.Details, "validation error names the bad field")
+	assert.Equal(t, "body.status", sdkErr.Details[0].Location)
 }
 
 func TestIntegration_GameSession_Lifecycle(t *testing.T) {
@@ -328,6 +338,112 @@ func TestIntegration_Server_VerifySession(t *testing.T) {
 	_, err = player.Server.VerifySession(ctx, player.Session().AccessToken)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ggscale.ErrForbidden))
+}
+
+// TestIntegration_Matchmaker_Tickets exercises the ticket lifecycle
+// deterministically, without needing a match to form: a lone min_count=2
+// ticket stays queued, so we can verify create, get, the one-active-ticket
+// 409, and cancel.
+func TestIntegration_Matchmaker_Tickets(t *testing.T) {
+	ctx := context.Background()
+	c := newPlayerClient(t)
+
+	req := ggscale.MatchRequest{Mode: ggscale.ModeMatchOnly, MinCount: 2, MaxCount: 2}
+	ticket, err := c.Matchmaker.CreateTicket(ctx, req)
+	require.NoError(t, err)
+	require.Positive(t, ticket.ID)
+	assert.Equal(t, "queued", ticket.Status)
+	// Never leave an active ticket behind — later matchmaker tests reuse
+	// this player and would hit the one-active-ticket limit.
+	defer func() { _ = c.Matchmaker.CancelTicket(context.Background(), ticket.ID) }()
+
+	got, err := c.Matchmaker.GetTicket(ctx, ticket.ID)
+	require.NoError(t, err)
+	assert.Equal(t, ticket.ID, got.ID)
+	assert.Equal(t, "match_only", got.Mode)
+
+	// One active ticket per player: a second create is refused, and the
+	// 409 names the active ticket so the caller can cancel it.
+	_, err = c.Matchmaker.CreateTicket(ctx, req)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ggscale.ErrTicketActive))
+	var sdkErr *ggscale.Error
+	require.ErrorAs(t, err, &sdkErr)
+	assert.Equal(t, ticket.ID, sdkErr.ActiveTicketID(), "409 carries the active ticket id")
+
+	require.NoError(t, c.Matchmaker.CancelTicket(ctx, ticket.ID))
+	after, err := c.Matchmaker.GetTicket(ctx, ticket.ID)
+	if err == nil {
+		assert.Equal(t, "cancelled", after.Status)
+	} else {
+		assert.True(t, errors.Is(err, ggscale.ErrNotFound), "cancelled ticket is terminal or gone")
+	}
+}
+
+// TestIntegration_Matchmaker_MatchOnly_and_Relay is the core P2P flow: two
+// players queue for a match_only match and connect. Both must land in the
+// same match with the same roster and host, and — since the stack enables
+// the relay — each gets match-scoped TURN credentials.
+func TestIntegration_Matchmaker_MatchOnly_and_Relay(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+
+	p0 := newPlayerClient(t)
+	p1 := secondPlayerClient(t)
+
+	// max_count == min_count == 2 forms a full group immediately; a larger
+	// max would make the worker wait out its relax window before pairing.
+	req := ggscale.MatchRequest{Mode: ggscale.ModeMatchOnly, MinCount: 2, MaxCount: 2}
+
+	type outcome struct {
+		m   *ggscale.P2PMatch
+		err error
+	}
+	ch := make(chan outcome, 2)
+	for _, client := range []*ggscale.Client{p0, p1} {
+		client := client
+		go func() {
+			m, err := client.Matchmaker.ConnectP2P(ctx, req, ggscale.GameSessionAddr{})
+			ch <- outcome{m, err}
+		}()
+	}
+	a, b := <-ch, <-ch
+	require.NoError(t, a.err, "first peer connects")
+	require.NoError(t, b.err, "second peer connects")
+
+	// Both peers see one shared match_only match with the full roster.
+	assert.Equal(t, string(ggscale.ModeMatchOnly), a.m.Result.Mode)
+	assert.NotEmpty(t, a.m.Result.MatchID)
+	assert.Equal(t, a.m.Result.MatchID, b.m.Result.MatchID, "peers share one match_id")
+	assert.Len(t, a.m.Result.Users, 2, "roster carries both players")
+	assert.Len(t, b.m.Result.Users, 2)
+
+	// Peers agree on the host, and exactly one of them is it.
+	assert.Positive(t, a.m.Result.HostPlayerID)
+	assert.Equal(t, a.m.Result.HostPlayerID, b.m.Result.HostPlayerID, "peers agree on the host")
+	assert.NotEqual(t, a.m.IsHost, b.m.IsHost, "exactly one peer hosts")
+
+	// Relay is enabled in the stack, so ConnectP2P gathered match-scoped
+	// credentials for each peer. (No real TURN server here, so urls is empty.)
+	require.NotNil(t, a.m.Relay, "relay enabled → credentials fetched")
+	assert.NotEmpty(t, a.m.Relay.Username)
+	assert.NotEmpty(t, a.m.Relay.Password)
+}
+
+// TestIntegration_Relay_Credentials verifies unscoped TURN credential
+// issuance directly: the publishable key's p2p_relay scope, the project's
+// p2p_relay feature grant, and metering all have to line up.
+func TestIntegration_Relay_Credentials(t *testing.T) {
+	ctx := context.Background()
+	c := newPlayerClient(t)
+
+	creds, err := c.Relay.GetCredentials(ctx)
+	require.NoError(t, err)
+	assert.NotEmpty(t, creds.Username)
+	assert.NotEmpty(t, creds.Password)
+	assert.Positive(t, creds.TTL)
+	assert.Equal(t, "ggscale", creds.Realm)
+	// urls is empty in the single-node dev stack (no reachable TURN listener).
 }
 
 func TestIntegration_Realtime_Dial(t *testing.T) {

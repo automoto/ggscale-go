@@ -15,9 +15,12 @@ type StorageService struct {
 	c *Client
 }
 
-// Object is a single key/value entry returned by Get, Put, and List.
-// Value is the raw JSON the caller stored; unmarshal it into a
-// concrete type with json.Unmarshal(obj.Value, &dst).
+// Object is a single key/value entry returned by Get and Put. Value is
+// the raw JSON the caller stored; unmarshal it into a concrete type with
+// json.Unmarshal(obj.Value, &dst).
+//
+// List does not return values — it returns lightweight
+// StorageObjectMetadata. Call Get on a key to read its value.
 type Object struct {
 	Key       string          `json:"key"`
 	Value     json.RawMessage `json:"value"`
@@ -25,11 +28,22 @@ type Object struct {
 	UpdatedAt time.Time       `json:"updated_at"`
 }
 
+// StorageObjectMetadata is one entry in a List page. The server returns
+// metadata only — no value — so listings stay cheap regardless of object
+// size. SizeBytes is the stored value's size in bytes; read the value
+// itself with StorageService.Get.
+type StorageObjectMetadata struct {
+	Key       string    `json:"key"`
+	Version   int64     `json:"version"`
+	UpdatedAt time.Time `json:"updated_at"`
+	SizeBytes int64     `json:"size_bytes"`
+}
+
 // ObjectPage is one page of List results. NextCursor is empty when
 // there are no further pages.
 type ObjectPage struct {
-	Items      []Object `json:"items"`
-	NextCursor string   `json:"next_cursor"`
+	Items      []StorageObjectMetadata `json:"items"`
+	NextCursor string                  `json:"next_cursor"`
 }
 
 // ListOptions configures Storage.List. Limit defaults server-side to
@@ -104,7 +118,8 @@ func (s *StorageService) Delete(ctx context.Context, key string) error {
 
 // List paginates through the calling player's objects, oldest first.
 // Filter by key prefix via opts.KeyPrefix. Loop until NextCursor is
-// empty.
+// empty. Each item is StorageObjectMetadata (key, version, updated_at,
+// size_bytes) — not the value; call Get to read a value.
 func (s *StorageService) List(ctx context.Context, opts ListOptions) (*ObjectPage, error) {
 	q := url.Values{}
 	if opts.KeyPrefix != "" {

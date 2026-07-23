@@ -170,8 +170,8 @@ func TestStorage_Delete_returns_no_error_on_204(t *testing.T) {
 func TestStorage_List_first_page_with_cursor_advances_to_empty(t *testing.T) {
 	page1 := map[string]any{
 		"items": []map[string]any{
-			{"key": "a", "value": json.RawMessage(`1`), "version": 1, "updated_at": time.Now().UTC().Format(time.RFC3339)},
-			{"key": "b", "value": json.RawMessage(`2`), "version": 1, "updated_at": time.Now().UTC().Format(time.RFC3339)},
+			{"key": "a", "version": 1, "updated_at": time.Now().UTC().Format(time.RFC3339), "size_bytes": 12},
+			{"key": "b", "version": 1, "updated_at": time.Now().UTC().Format(time.RFC3339), "size_bytes": 34},
 		},
 		"next_cursor": "10",
 	}
@@ -201,6 +201,11 @@ func TestStorage_List_first_page_with_cursor_advances_to_empty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, first.Items, 2)
 	assert.Equal(t, "10", first.NextCursor)
+	// List items are metadata only: key/version/updated_at/size_bytes,
+	// no value.
+	assert.Equal(t, "a", first.Items[0].Key)
+	assert.Equal(t, int64(12), first.Items[0].SizeBytes)
+	assert.Equal(t, int64(34), first.Items[1].SizeBytes)
 
 	second, err := c.Storage.List(context.Background(), ListOptions{KeyPrefix: "abc", Cursor: "10"})
 	require.NoError(t, err)

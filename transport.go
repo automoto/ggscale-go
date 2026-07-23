@@ -105,6 +105,8 @@ func (e *Error) Is(target error) bool {
 		return e.Status == http.StatusTooManyRequests
 	case ErrBadRequest:
 		return e.Status == http.StatusBadRequest
+	case ErrValidation:
+		return e.Status == http.StatusUnprocessableEntity
 	case ErrTicketActive:
 		// The stable identifier lives in the machine-readable `code`
 		// extension; fall back to Message for the legacy envelope, which
@@ -124,6 +126,11 @@ var (
 	ErrConflict     = errors.New("ggscale: conflict")
 	ErrRateLimited  = errors.New("ggscale: rate limited")
 	ErrBadRequest   = errors.New("ggscale: bad request")
+	// ErrValidation is a 422 Unprocessable Entity: the request was
+	// well-formed but failed field validation (e.g. an empty required
+	// field). The offending fields are in Error.Details — each entry's
+	// Location (e.g. "body.status") and Message name what to fix.
+	ErrValidation = errors.New("ggscale: validation failed")
 	// ErrTicketActive is the 409 returned by matchmaker CreateTicket when the
 	// player already has an active ticket in the project. Read the active
 	// ticket id with (*Error).ActiveTicketID.

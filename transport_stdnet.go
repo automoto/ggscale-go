@@ -12,13 +12,13 @@ import (
 )
 
 const (
-	userAgent      = "ggscale-go/0.3.0"
+	userAgent      = "ggscale-go/" + Version
 	defaultTimeout = 30 * time.Second
 )
 
-// StdNetTransport is the only Transport implementation in v0.1: JSON
-// over HTTPS via the standard library net/http client. Construct one
-// with at minimum a BaseURL; Client is optional.
+// StdNetTransport is the default Transport: JSON over HTTP(S) via the
+// standard library net/http client. Construct one with at minimum a
+// BaseURL; Client is optional.
 type StdNetTransport struct {
 	BaseURL string
 	Client  *http.Client

@@ -1,5 +1,6 @@
-// Quickstart is a ~50-line tour of the ggscale Go SDK: signup, login,
-// score submit, top-N read. Run against a local `make up` stack:
+// Quickstart is a short tour of the ggscale Go SDK: signup, login,
+// per-player storage, and a leaderboard read. Run against a local
+// `make up` stack:
 //
 //	export GGSCALE_API_KEY=<key from the control panel>
 //	cd sdk-go && go run ./examples/quickstart
@@ -46,11 +47,20 @@ func main() {
 		log.Fatalf("login: %v", err)
 	}
 
-	const leaderboardID int64 = 1
-	if err := c.Leaderboards.Submit(ctx, leaderboardID, 1500); err != nil {
-		log.Fatalf("submit: %v", err)
+	// Per-player storage: write a value and read it back.
+	if _, err := c.Storage.Put(ctx, "settings", map[string]any{"theme": "dark"}); err != nil {
+		log.Fatalf("storage put: %v", err)
 	}
+	settings, err := c.Storage.Get(ctx, "settings")
+	if err != nil {
+		log.Fatalf("storage get: %v", err)
+	}
+	fmt.Printf("settings: %s\n", settings.Value)
 
+	// Read a leaderboard. Score *submission* is server-authoritative and
+	// lives on the server tier (Client.Server.SubmitScore, secret key) —
+	// a publishable-key game client only reads. See docs/leaderboards-p2p.md.
+	const leaderboardID int64 = 1
 	top, err := c.Leaderboards.Top(ctx, leaderboardID, 5)
 	if err != nil {
 		log.Fatalf("top: %v", err)

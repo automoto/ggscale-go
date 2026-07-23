@@ -13,8 +13,8 @@ import (
 )
 
 // Message is the wire envelope pushed by the server over the WebSocket.
-// Type discriminates payloads (match_ready, presence, chat …). Payload is
-// opaque JSON.
+// Type discriminates payloads (matchmaker_matched, presence, chat …).
+// Payload is opaque JSON.
 type Message struct {
 	Type    string          `json:"type"`
 	Payload json.RawMessage `json:"payload,omitempty"`

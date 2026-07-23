@@ -10,20 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLeaderboards_Submit_posts_score(t *testing.T) {
-	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
-	c := newClientWithFake(t, ft)
-
-	err := c.Leaderboards.Submit(context.Background(), 42, 1500)
-	require.NoError(t, err)
-
-	assert.Equal(t, http.MethodPost, ft.gotReq.Method)
-	assert.Equal(t, "/v1/leaderboards/42/scores", ft.gotReq.Path)
-	body, ok := ft.gotReq.Body.(submitScoreRequest)
-	require.True(t, ok)
-	assert.Equal(t, int64(1500), body.Score)
-}
-
 func TestLeaderboards_Top_returns_entries(t *testing.T) {
 	ft := &fakeTransport{
 		respond: func(*Request) (any, error) {
@@ -100,14 +86,14 @@ func TestLeaderboards_AroundMe_with_entries(t *testing.T) {
 	assert.Equal(t, int64(7), res.Entries[1].PlayerID)
 }
 
-func TestLeaderboards_SubmitFor_uses_supplied_session_token(t *testing.T) {
+func TestServer_SubmitScore_uses_supplied_session_token(t *testing.T) {
 	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
 	c, _ := NewClient(Options{APIKey: "ggs_secret", Transport: ft})
-	// Note: no Client.SetSession — SubmitFor must NOT require a
+	// Note: no Client.SetSession — SubmitScore must NOT require a
 	// per-Client session, because a game server uses one Client for
 	// many concurrent players.
 
-	err := c.Leaderboards.SubmitFor(context.Background(), "player-123-jwt", 42, 1500)
+	err := c.Server.SubmitScore(context.Background(), "player-123-jwt", 42, 1500)
 	require.NoError(t, err)
 
 	assert.Equal(t, http.MethodPost, ft.gotReq.Method)
@@ -119,7 +105,16 @@ func TestLeaderboards_SubmitFor_uses_supplied_session_token(t *testing.T) {
 	assert.Equal(t, int64(1500), body.Score)
 }
 
-func TestLeaderboards_SubmitFor_propagates_403_from_publishable_key(t *testing.T) {
+func TestServer_SubmitScore_requires_session_token(t *testing.T) {
+	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
+	c, _ := NewClient(Options{APIKey: "ggs_secret", Transport: ft})
+
+	err := c.Server.SubmitScore(context.Background(), "", 1, 100)
+	require.Error(t, err)
+	assert.Nil(t, ft.gotReq, "no request is sent without a session token")
+}
+
+func TestServer_SubmitScore_propagates_403_from_publishable_key(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte("leaderboard submit requires secret key"))
@@ -127,13 +122,13 @@ func TestLeaderboards_SubmitFor_propagates_403_from_publishable_key(t *testing.T
 	defer srv.Close()
 
 	c, _ := NewClient(Options{APIKey: "ggp_publishable", BaseURL: srv.URL})
-	err := c.Leaderboards.SubmitFor(context.Background(), "player-jwt", 1, 100)
+	err := c.Server.SubmitScore(context.Background(), "player-jwt", 1, 100)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrForbidden)
 }
 
-func TestLeaderboards_SubmitFor_does_not_mutate_client_session(t *testing.T) {
+func TestServer_SubmitScore_does_not_mutate_client_session(t *testing.T) {
 	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
 	c, _ := NewClient(Options{APIKey: "ggs_secret", Transport: ft})
 	clientSession := &Session{
@@ -142,22 +137,9 @@ func TestLeaderboards_SubmitFor_does_not_mutate_client_session(t *testing.T) {
 	}
 	c.SetSession(clientSession)
 
-	err := c.Leaderboards.SubmitFor(context.Background(), "player-jwt", 1, 100)
+	err := c.Server.SubmitScore(context.Background(), "player-jwt", 1, 100)
 	require.NoError(t, err)
 
 	assert.Equal(t, "operator.jwt", c.Session().AccessToken)
 	assert.Equal(t, "player-jwt", ft.gotReq.SessionToken)
-}
-
-func TestLeaderboards_Submit_404_returns_ErrNotFound(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("leaderboard not found"))
-	}))
-	defer srv.Close()
-
-	c, _ := NewClient(Options{APIKey: "k", BaseURL: srv.URL})
-	c.SetSession(liveSession())
-	err := c.Leaderboards.Submit(context.Background(), 999, 100)
-	require.Error(t, err)
 }

@@ -56,6 +56,33 @@ func (s *ServerService) VerifySession(ctx context.Context, sessionToken string) 
 	return &res, nil
 }
 
+// SubmitScore posts a score to a leaderboard on behalf of the player
+// identified by playerSessionToken. Score writes are server-authoritative:
+// the caller's secret API key authorises the write and the supplied
+// session token names the subject player. A publishable-key caller is
+// refused with ErrForbidden.
+//
+// This is the only submission path. In peer-to-peer games, run it from a
+// trusted holder of the secret key (a small backend or cloud function),
+// typically after VerifySession — never ship the secret key in a game
+// client. See docs/leaderboards-p2p.md. One Client serves many players:
+// the session token is passed per call and never mutates Client state.
+//
+// Returns ErrNotFound if the leaderboard does not exist and
+// ErrUnauthorized if the session token is invalid.
+func (s *ServerService) SubmitScore(ctx context.Context, playerSessionToken string, leaderboardID, score int64) error {
+	if playerSessionToken == "" {
+		return errors.New("ggscale: player session token is required")
+	}
+	return s.transport.Call(ctx, &Request{
+		Method:       http.MethodPost,
+		Path:         "/v1/leaderboards/" + strconv.FormatInt(leaderboardID, 10) + "/scores",
+		Body:         submitScoreRequest{Score: score},
+		APIKey:       s.apiKey,
+		SessionToken: playerSessionToken,
+	}, nil)
+}
+
 // PlayerRemoteAddrs reads the remote addresses a player published for
 // direct connectivity (see AccountService.SetRemoteAddrs). Requires a
 // secret API key whose project the player belongs to; returns

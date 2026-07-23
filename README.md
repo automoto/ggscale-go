@@ -2,7 +2,7 @@
 
 Official Go client for the [ggscale](https://github.com/automoto/gg-scale) API. Covers the v1 surface used by game code: player authentication, per-player JSON storage, leaderboards, profiles, friends, presence, player-hosted game sessions with invites, matchmaking, real-time events, and server-tier session verification.
 
-The SDK has zero third-party runtime dependencies — just the standard library.
+The SDK's only runtime dependency is [`github.com/coder/websocket`](https://github.com/coder/websocket), used by the realtime client. Everything else is the Go standard library.
 
 ## Install
 
@@ -43,10 +43,6 @@ func main() {
         log.Fatal(err)
     }
 
-    if err := c.Leaderboards.Submit(ctx, 1, 1500); err != nil {
-        log.Fatal(err)
-    }
-
     top, _ := c.Leaderboards.Top(ctx, 1, 5)
     for _, e := range top {
         fmt.Printf("#%d  player=%d  score=%d\n", e.Rank+1, e.PlayerID, e.Score)
@@ -61,8 +57,8 @@ A runnable version of this lives in [`examples/quickstart/`](examples/quickstart
 | Service | Methods |
 |---|---|
 | `Client.Auth` | `Signup`, `Verify`, `Refresh`, `Logout` |
-| `Client.Storage` | `Get`, `Put`, `Delete`, `List` (cursor-paginated, OCC via `IfMatch`) |
-| `Client.Leaderboards` | `Submit`, `SubmitFor`, `Top`, `AroundMe` |
+| `Client.Storage` | `Get`, `Put`, `Delete`, `List` (metadata-only, cursor-paginated, OCC via `IfMatch`) |
+| `Client.Leaderboards` | `Top`, `AroundMe` (reads; submission is server-tier — see `Client.Server`) |
 | `Client.Profile` | `Get`, `Update` |
 | `Client.Friends` | `List`, `Request`, `Accept`, `Reject`, `Remove`, `Block`, `Unblock`, `RemoteAddrs` |
 | `Client.GameSessions` | `Create`, `Get`, `Resolve`, `Join`, `Heartbeat`, `Leave` |
@@ -72,7 +68,7 @@ A runnable version of this lives in [`examples/quickstart/`](examples/quickstart
 | `Client.Matchmaker` | `CreateTicket`, `GetTicket`, `CancelTicket`, `WaitForMatch`, `ConnectP2P` |
 | `Client.Fleets` | `SendHeartbeat`, `ListServers` |
 | `Client.Relay` | `GetCredentials` |
-| `Client.Server` | `VerifySession`, `PlayerRemoteAddrs` (server-tier, secret API key) |
+| `Client.Server` | `VerifySession`, `SubmitScore`, `PlayerRemoteAddrs` (server-tier, secret API key) |
 
 Four `Authenticator` strategies for `Client.Login`:
 
@@ -85,7 +81,7 @@ The `Client` is safe for concurrent use. Sessions auto-refresh: a proactive refr
 
 ## Errors
 
-Every non-2xx response returns a `*ggscale.Error` carrying `Status`, server `Code`, `Message`, and (when relevant) `RetryAfter`. Match common cases with `errors.Is`:
+Every non-2xx response returns a `*ggscale.Error` carrying `Status`, server `Code`, `Message`, `Details` (per-field validation entries), and (when relevant) `RetryAfter`. Match common cases with `errors.Is`:
 
 ```go
 _, err := c.Storage.Put(ctx, "k", v, ggscale.IfMatch(2))
@@ -99,7 +95,9 @@ case errors.Is(err, ggscale.ErrRateLimited):
 }
 ```
 
-Sentinels: `ErrUnauthorized`, `ErrForbidden`, `ErrNotFound`, `ErrConflict`, `ErrRateLimited`, `ErrBadRequest`.
+Sentinels: `ErrUnauthorized`, `ErrForbidden`, `ErrNotFound`, `ErrConflict`, `ErrRateLimited`, `ErrBadRequest`, `ErrValidation`.
+
+Field validation failures come back as `ErrValidation` (HTTP 422); the offending fields are in `err.(*ggscale.Error).Details`, each naming a `Location` (e.g. `body.status`) and `Message`.
 
 ## Pluggable transport
 
@@ -138,7 +136,7 @@ Unit tests use `httptest.NewServer` and a fake `Transport`; they do not require 
 ### Integration tests
 
 `make test-integration` brings up a minimal stack with docker compose —
-Postgres plus `buildwrangler/ggscale:latest` pulled from Docker Hub (the
+Postgres plus `buildwrangler/ggscale:v0.9.0` pulled from Docker Hub (the
 server applies its own migrations at startup) — seeds a tenant, project,
 and API keys directly via `integration/seed.sql`, runs the
 `-tags=integration` tests in `integration_test.go` against it on
