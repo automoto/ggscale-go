@@ -27,7 +27,6 @@ type GameSessionPeer struct {
 	PlayerID int64           `json:"player_id"`
 	XUID     string          `json:"xuid,omitempty"`
 	Addr     GameSessionAddr `json:"addr"`
-	Relay    json.RawMessage `json:"relay,omitempty"`
 }
 
 // GameSession is the state of a session as returned by Create, Get,

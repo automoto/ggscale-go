@@ -20,6 +20,7 @@ type Credentials struct {
 	TTL      int64    `json:"ttl"`
 	Realm    string   `json:"realm"`
 	URLs     []string `json:"urls,omitempty"`
+	STUNURLs []string `json:"stun_urls,omitempty"`
 }
 
 // RelayOption configures a relay credential request.

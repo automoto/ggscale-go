@@ -29,6 +29,13 @@ type AnonymousAuth struct {
 	transport Transport
 	apiKey    string
 	storePath string
+	store     SessionStore
+}
+
+type SessionStore interface {
+	Load() (*Session, error)
+	Save(*Session) error
+	Clear() error
 }
 
 // NewAnonymousAuth builds an Authenticator that calls /v1/auth/anonymous.
@@ -38,10 +45,19 @@ func NewAnonymousAuth(t Transport, apiKey, storePath string) *AnonymousAuth {
 	return &AnonymousAuth{transport: t, apiKey: apiKey, storePath: storePath}
 }
 
+func NewAnonymousAuthWithStore(t Transport, apiKey string, store SessionStore) *AnonymousAuth {
+	return &AnonymousAuth{transport: t, apiKey: apiKey, store: store}
+}
+
 // Authenticate implements Authenticator. Returns a persisted session if
 // one is on disk; otherwise mints a new one via /v1/auth/anonymous and
 // (best-effort) writes it to storePath.
 func (a *AnonymousAuth) Authenticate(ctx context.Context) (*Session, error) {
+	if a.store != nil {
+		if sess, err := a.store.Load(); err == nil && sess != nil && sess.RefreshToken != "" {
+			return sess, nil
+		}
+	}
 	if a.storePath != "" {
 		if sess, ok := loadSessionFile(a.storePath); ok {
 			return sess, nil
@@ -60,6 +76,9 @@ func (a *AnonymousAuth) Authenticate(ctx context.Context) (*Session, error) {
 	if a.storePath != "" {
 		_ = saveSessionFile(a.storePath, sess)
 	}
+	if a.store != nil {
+		_ = a.store.Save(sess)
+	}
 	return sess, nil
 }
 
@@ -67,6 +86,13 @@ func (a *AnonymousAuth) Authenticate(ctx context.Context) (*Session, error) {
 // Options.OnSessionUpdate so refreshed sessions are persisted; no-op
 // when storePath is empty.
 func (a *AnonymousAuth) SaveSession(s *Session) {
+	if a.store != nil {
+		if s == nil {
+			_ = a.store.Clear()
+		} else {
+			_ = a.store.Save(s)
+		}
+	}
 	if a.storePath == "" || s == nil {
 		return
 	}

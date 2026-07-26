@@ -36,6 +36,7 @@ type Client struct {
 	Fleets       *FleetsService
 	Friends      *FriendsService
 	GameSessions *GameSessionsService
+	Signals      *GameSessionSignalsService
 	Invites      *InvitesService
 	Presence     *PresenceService
 	Account      *AccountService
@@ -107,6 +108,7 @@ func NewClient(opts Options) (*Client, error) {
 	c.Fleets = &FleetsService{c: c}
 	c.Friends = &FriendsService{c: c}
 	c.GameSessions = &GameSessionsService{c: c}
+	c.Signals = &GameSessionSignalsService{c: c}
 	c.Invites = &InvitesService{c: c}
 	c.Presence = &PresenceService{c: c}
 	c.Account = &AccountService{c: c}
