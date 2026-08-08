@@ -1,0 +1,3817 @@
+components:
+  schemas:
+    AnonymousResponse:
+      additionalProperties: false
+      properties:
+        access_token:
+          examples:
+            - eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MiJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+          type: string
+        expires_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+        external_id:
+          examples:
+            - anon_9f86d081884c7d659a2feaa0c55ad015
+          type: string
+        player_id:
+          examples:
+            - 42
+          format: int64
+          type: integer
+        refresh_token:
+          examples:
+            - 3f2c8a1d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b
+          type: string
+      required:
+        - access_token
+        - refresh_token
+        - player_id
+        - external_id
+        - expires_at
+      type: object
+    ChangePasswordInputBody:
+      additionalProperties: false
+      properties:
+        current_password:
+          examples:
+            - correct-horse-battery-staple
+          type: string
+        new_password:
+          examples:
+            - battery-staple-correct-horse
+          type: string
+      type: object
+    Credentials:
+      additionalProperties: false
+      properties:
+        password:
+          examples:
+            - dGVzdC1obWFjLXNhbXBsZS12YWx1ZQ==
+          type: string
+        realm:
+          examples:
+            - ggscale
+          type: string
+        stun_urls:
+          examples:
+            - - stun:stun.example.com:3478
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        ttl:
+          examples:
+            - 600
+          format: int64
+          type: integer
+        urls:
+          examples:
+            - - turn:relay.example.com:3478?transport=udp
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        username:
+          examples:
+            - 1767225600:3:42:k1
+          type: string
+      required:
+        - username
+        - password
+        - ttl
+        - realm
+      type: object
+    CustomTokenRequest:
+      additionalProperties: false
+      properties:
+        token:
+          examples:
+            - eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHRlcm5hbF9pZCI6InN0ZWFtOjc2NTYxMTk4MDAwMDAwMDAifQ.k7HfXWY0mYbXvJqPz3sB4c9Q2rN8dEwTuVxYzA1bC2d
+          minLength: 1
+          type: string
+      required:
+        - token
+      type: object
+    DisableInputBody:
+      additionalProperties: false
+      properties:
+        password:
+          examples:
+            - correct-horse-battery-staple
+          type: string
+      type: object
+    ErrorDetail:
+      additionalProperties: false
+      properties:
+        location:
+          description: Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id'
+          type: string
+        message:
+          description: Error message text
+          type: string
+        value:
+          description: The value at the given location
+      type: object
+    ErrorModel:
+      additionalProperties: false
+      properties:
+        detail:
+          description: A human-readable explanation specific to this occurrence of the problem.
+          examples:
+            - Property foo is required but is missing.
+          type: string
+        errors:
+          description: Optional list of individual error details
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+          type:
+            - array
+            - "null"
+        instance:
+          description: A URI reference that identifies the specific occurrence of the problem.
+          examples:
+            - https://example.com/error-log/abc123
+          format: uri
+          type: string
+        status:
+          description: HTTP status code
+          examples:
+            - 400
+          format: int64
+          type: integer
+        title:
+          description: A short, human-readable summary of the problem type. This value should not change between occurrences of the error.
+          examples:
+            - Bad Request
+          type: string
+        type:
+          default: about:blank
+          description: A URI reference to human-readable documentation for the error.
+          examples:
+            - https://example.com/errors/example
+          format: uri
+          type: string
+      type: object
+    FriendCodeResult:
+      additionalProperties: false
+      properties:
+        friend_code:
+          examples:
+            - XKCD4242
+          type: string
+      required:
+        - friend_code
+      type: object
+    FriendEntry:
+      additionalProperties: false
+      properties:
+        account_id:
+          examples:
+            - 6f9619ff-8b86-4d01-b42d-00cf4fc964ff
+          type: string
+        created_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+        display_name:
+          examples:
+            - PlayerTwo
+          type: string
+        email:
+          examples:
+            - friend@example.com
+          type: string
+        id:
+          examples:
+            - 12
+          format: int64
+          type: integer
+        player_id:
+          examples:
+            - 87
+          format: int64
+          type: integer
+        presence:
+          $ref: "#/components/schemas/FriendPresence"
+        status:
+          examples:
+            - accepted
+          type: string
+        updated_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+      required:
+        - id
+        - account_id
+        - status
+        - created_at
+        - updated_at
+      type: object
+    FriendPresence:
+      additionalProperties: false
+      properties:
+        session_id:
+          examples:
+            - gs_9f86d081884c7d659a2feaa0c55ad015
+          type:
+            - string
+            - "null"
+        status:
+          examples:
+            - online
+          type: string
+      required:
+        - status
+        - session_id
+      type: object
+    FriendStatusResult:
+      additionalProperties: false
+      properties:
+        status:
+          examples:
+            - requested
+          type: string
+      required:
+        - status
+      type: object
+    FriendsListResult:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/FriendEntry"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          examples:
+            - "104"
+          type: string
+      required:
+        - items
+        - next_cursor
+      type: object
+    GameInviteCreateOutputBody:
+      additionalProperties: false
+      properties:
+        invite_id:
+          examples:
+            - 314
+          format: int64
+          type: integer
+      required:
+        - invite_id
+      type: object
+    GameInviteCreateRequest:
+      additionalProperties: false
+      properties:
+        session_id:
+          examples:
+            - gs_9f86d081884c7d659a2feaa0c55ad015
+          minLength: 1
+          type: string
+        to_email:
+          examples:
+            - friend@example.com
+          minLength: 1
+          type: string
+      required:
+        - to_email
+        - session_id
+      type: object
+    GameInviteEntry:
+      additionalProperties: false
+      properties:
+        expires_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+        from_email:
+          examples:
+            - player@example.com
+          type: string
+        from_xuid:
+          examples:
+            - "2533274790395904"
+          type: string
+        invite_id:
+          examples:
+            - 314
+          format: int64
+          type: integer
+        join_code:
+          examples:
+            - XKCD42
+          type: string
+        session_id:
+          examples:
+            - gs_9f86d081884c7d659a2feaa0c55ad015
+          type: string
+      required:
+        - invite_id
+        - session_id
+        - join_code
+        - expires_at
+      type: object
+    GameInviteListOutputBody:
+      additionalProperties: false
+      properties:
+        invites:
+          items:
+            $ref: "#/components/schemas/GameInviteEntry"
+          type:
+            - array
+            - "null"
+      required:
+        - invites
+      type: object
+    GameSessionAddr:
+      additionalProperties: false
+      properties:
+        ip:
+          examples:
+            - 203.0.113.10
+          type: string
+        port:
+          examples:
+            - 7777
+          format: int64
+          type: integer
+      required:
+        - ip
+        - port
+      type: object
+    GameSessionCreateRequest:
+      additionalProperties: false
+      properties:
+        max_players:
+          examples:
+            - 8
+          format: int64
+          type: integer
+        private:
+          examples:
+            - false
+          type: boolean
+        props:
+          examples:
+            - map: arena-2
+        public_addr:
+          $ref: "#/components/schemas/GameSessionAddr"
+        title_id:
+          examples:
+            - my-game
+          type: string
+      type: object
+    GameSessionHeartbeatRequest:
+      additionalProperties: false
+      properties:
+        qos:
+          examples:
+            - rtt_ms: 48
+      type: object
+    GameSessionHeartbeatResult:
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        peers:
+          items:
+            $ref: "#/components/schemas/PeerEntry"
+          type:
+            - array
+            - "null"
+      required:
+        - ok
+        - peers
+      type: object
+    GameSessionJoinRequest:
+      additionalProperties: false
+      properties:
+        public_addr:
+          $ref: "#/components/schemas/GameSessionAddr"
+      type: object
+    GameSessionListResult:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/PublicGameSessionEntry"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          examples:
+            - gs_9f86d081884c7d659a2feaa0c55ad015
+          type: string
+      required:
+        - items
+        - next_cursor
+      type: object
+    GameSessionResolveResult:
+      additionalProperties: false
+      properties:
+        session_id:
+          examples:
+            - gs_9f86d081884c7d659a2feaa0c55ad015
+          type: string
+      required:
+        - session_id
+      type: object
+    GameSessionResponse:
+      additionalProperties: false
+      properties:
+        expires_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          format: date-time
+          type: string
+        join_code:
+          examples:
+            - XKCD42
+          type: string
+        peers:
+          items:
+            $ref: "#/components/schemas/PeerEntry"
+          type:
+            - array
+            - "null"
+        session_id:
+          examples:
+            - gs_9f86d081884c7d659a2feaa0c55ad015
+          type: string
+        state:
+          examples:
+            - open
+          type: string
+      required:
+        - session_id
+        - join_code
+        - state
+        - expires_at
+        - peers
+      type: object
+    GameSessionSignalEntry:
+      additionalProperties: false
+      properties:
+        created_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          format: date-time
+          type: string
+        from_player_id:
+          examples:
+            - 42
+          format: int64
+          type: integer
+        id:
+          examples:
+            - 513
+          format: int64
+          type: integer
+        kind:
+          examples:
+            - answer
+          type: string
+        negotiation_id:
+          examples:
+            - neg-42-87-1
+          type: string
+        payload:
+          examples:
+            - eyJ0eXBlIjoiYW5zd2VyIiwic2RwIjoidj0wLi4uIn0=
+          type: string
+        to_player_id:
+          examples:
+            - 87
+          format: int64
+          type: integer
+      required:
+        - id
+        - from_player_id
+        - to_player_id
+        - negotiation_id
+        - kind
+        - payload
+        - created_at
+      type: object
+    GameSessionSignalPollResult:
+      additionalProperties: false
+      properties:
+        signals:
+          items:
+            $ref: "#/components/schemas/GameSessionSignalEntry"
+          type:
+            - array
+            - "null"
+      required:
+        - signals
+      type: object
+    GameSessionSignalRequest:
+      additionalProperties: false
+      properties:
+        kind:
+          enum:
+            - offer
+            - answer
+            - restart_offer
+            - restart_answer
+          examples:
+            - offer
+          type: string
+        negotiation_id:
+          examples:
+            - neg-42-87-1
+          maxLength: 128
+          minLength: 1
+          type: string
+        payload:
+          examples:
+            - eyJ0eXBlIjoib2ZmZXIiLCJzZHAiOiJ2PTAuLi4ifQ==
+          minLength: 1
+          type: string
+        to_player_id:
+          examples:
+            - 87
+          format: int64
+          minimum: 1
+          type: integer
+      required:
+        - to_player_id
+        - negotiation_id
+        - kind
+        - payload
+      type: object
+    GameSessionSignalSendResult:
+      additionalProperties: false
+      properties:
+        id:
+          examples:
+            - 512
+          format: int64
+          type: integer
+      required:
+        - id
+      type: object
+    HealthzResult:
+      additionalProperties: false
+      properties:
+        commit:
+          examples:
+            - abc1234
+          type: string
+        status:
+          examples:
+            - ok
+          type: string
+        version:
+          examples:
+            - 1.0.0
+          type: string
+      required:
+        - status
+        - version
+        - commit
+      type: object
+    HeartbeatRequest:
+      additionalProperties: false
+      properties:
+        address:
+          examples:
+            - 203.0.113.10:7777
+          type: string
+        agones_name:
+          examples:
+            - gameserver-abc12
+          type: string
+        current_players:
+          examples:
+            - 12
+          format: int64
+          type: integer
+        fleet:
+          examples:
+            - default
+          type: string
+        game_mode:
+          examples:
+            - ctf
+          type: string
+        level:
+          examples:
+            - arena-2
+          type: string
+        max_players:
+          examples:
+            - 16
+          format: int64
+          type: integer
+        name:
+          examples:
+            - us-east-1-a1
+          type: string
+        region:
+          examples:
+            - us-east-1
+          type: string
+        version:
+          examples:
+            - 1.4.2
+          type: string
+      type: object
+    LeaderboardAroundMeResult:
+      additionalProperties: false
+      properties:
+        entries:
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+          type:
+            - array
+            - "null"
+        self_rank:
+          examples:
+            - 12
+          format: int64
+          type: integer
+      required:
+        - entries
+        - self_rank
+      type: object
+    LeaderboardEntry:
+      additionalProperties: false
+      properties:
+        display_name:
+          examples:
+            - Nova Fox
+          type: string
+        metadata:
+          examples:
+            - ghost: r-42
+        player_id:
+          examples:
+            - 42
+          format: int64
+          type: integer
+        rank:
+          examples:
+            - 3
+          format: int64
+          type: integer
+        score:
+          examples:
+            - 1500
+          format: int64
+          type: integer
+      required:
+        - player_id
+        - score
+        - rank
+      type: object
+    LeaderboardInfo:
+      additionalProperties: false
+      properties:
+        attempt_cap:
+          examples:
+            - 3
+          format: int32
+          type: integer
+        client_submissions:
+          examples:
+            - false
+          type: boolean
+        current_period:
+          examples:
+            - 2
+          format: int32
+          type: integer
+        id:
+          examples:
+            - 1
+          format: int64
+          type: integer
+        metadata:
+          examples:
+            - icon: gold
+        name:
+          examples:
+            - weekly-high-score
+          type: string
+        next_reset_at:
+          format: date-time
+          type: string
+        period_started_at:
+          format: date-time
+          type: string
+        reset_schedule:
+          enum:
+            - none
+            - daily
+            - weekly
+            - monthly
+          examples:
+            - weekly
+          type: string
+        score_max:
+          examples:
+            - 1000000
+          format: int64
+          type: integer
+        score_min:
+          examples:
+            - 0
+          format: int64
+          type: integer
+        score_operator:
+          enum:
+            - best
+            - set
+            - incr
+          examples:
+            - best
+          type: string
+        sort_order:
+          enum:
+            - asc
+            - desc
+          examples:
+            - desc
+          type: string
+      required:
+        - id
+        - name
+        - sort_order
+        - score_operator
+        - client_submissions
+        - reset_schedule
+        - current_period
+      type: object
+    LeaderboardListResult:
+      additionalProperties: false
+      properties:
+        leaderboards:
+          items:
+            $ref: "#/components/schemas/LeaderboardInfo"
+          type:
+            - array
+            - "null"
+      required:
+        - leaderboards
+      type: object
+    LeaderboardPeriodSummary:
+      additionalProperties: false
+      properties:
+        ended_at:
+          format: date-time
+          type: string
+        period:
+          examples:
+            - 12
+          format: int32
+          type: integer
+        started_at:
+          format: date-time
+          type: string
+      required:
+        - period
+        - started_at
+        - ended_at
+      type: object
+    LeaderboardPeriodsResult:
+      additionalProperties: false
+      properties:
+        current_period:
+          examples:
+            - 13
+          format: int32
+          type: integer
+        next_cursor:
+          examples:
+            - "7"
+          type: string
+        next_reset_at:
+          format: date-time
+          type: string
+        period_started_at:
+          format: date-time
+          type: string
+        periods:
+          items:
+            $ref: "#/components/schemas/LeaderboardPeriodSummary"
+          type:
+            - array
+            - "null"
+        reset_schedule:
+          enum:
+            - none
+            - daily
+            - weekly
+            - monthly
+          examples:
+            - weekly
+          type: string
+      required:
+        - current_period
+        - reset_schedule
+        - periods
+      type: object
+    LeaderboardTopResult:
+      additionalProperties: false
+      properties:
+        entries:
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+          type:
+            - array
+            - "null"
+      required:
+        - entries
+      type: object
+    LinkEmailRequest:
+      additionalProperties: false
+      properties:
+        email:
+          examples:
+            - player@example.com
+          type: string
+        password:
+          examples:
+            - correct-horse-battery-staple
+          type: string
+      type: object
+    ListServersResponse:
+      additionalProperties: false
+      properties:
+        servers:
+          items:
+            $ref: "#/components/schemas/Server"
+          type:
+            - array
+            - "null"
+      required:
+        - servers
+      type: object
+    LoginRequest:
+      additionalProperties: false
+      properties:
+        email:
+          examples:
+            - player@example.com
+          type: string
+        password:
+          examples:
+            - correct-horse-battery-staple
+          type: string
+      type: object
+    LogoutRequest:
+      additionalProperties: false
+      properties:
+        refresh_token:
+          examples:
+            - 3f2c8a1d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b
+          minLength: 1
+          type: string
+      required:
+        - refresh_token
+      type: object
+    MatchmakerTicketRequest:
+      additionalProperties: false
+      properties:
+        allow_cross_region:
+          examples:
+            - true
+          type: boolean
+        attributes:
+          examples:
+            - lobby_code: XKCD42
+        count_multiple:
+          examples:
+            - 2
+          format: int64
+          type: integer
+        fleet:
+          examples:
+            - default
+          type: string
+        game_mode:
+          examples:
+            - ctf
+          type: string
+        max_count:
+          examples:
+            - 4
+          format: int64
+          type: integer
+        min_count:
+          examples:
+            - 2
+          format: int64
+          type: integer
+        mode:
+          examples:
+            - game_session
+          type: string
+        numeric_properties:
+          additionalProperties:
+            format: double
+            type: number
+          examples:
+            - skill: 1420.5
+          type: object
+        query:
+          type: string
+        region:
+          examples:
+            - us-east-1
+          type: string
+        string_properties:
+          additionalProperties:
+            type: string
+          examples:
+            - map: arena-2
+          type: object
+      type: object
+    MatchmakerTicketResponse:
+      additionalProperties: false
+      properties:
+        allow_cross_region:
+          examples:
+            - true
+          type: boolean
+        attributes:
+          examples:
+            - lobby_code: XKCD42
+        count_multiple:
+          examples:
+            - 2
+          format: int64
+          type: integer
+        created_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+        expires_at:
+          examples:
+            - "2026-01-02T15:09:05Z"
+          type: string
+        failure_reason:
+          examples:
+            - expired
+          type: string
+        game_mode:
+          examples:
+            - ctf
+          type: string
+        host_player_id:
+          examples:
+            - 42
+          format: int64
+          type: integer
+        id:
+          examples:
+            - 9001
+          format: int64
+          type: integer
+        join_code:
+          examples:
+            - XKCD42
+          type: string
+        match_address:
+          examples:
+            - 203.0.113.10:7777
+          type: string
+        match_id:
+          examples:
+            - mm_5f3a9c1d2e4b6a70
+          type: string
+        matched_at:
+          examples:
+            - "2026-01-02T15:04:35Z"
+          type: string
+        max_count:
+          examples:
+            - 4
+          format: int64
+          type: integer
+        min_count:
+          examples:
+            - 2
+          format: int64
+          type: integer
+        mode:
+          examples:
+            - game_session
+          type: string
+        numeric_properties:
+          additionalProperties:
+            format: double
+            type: number
+          examples:
+            - skill: 1420.5
+          type: object
+        protocol_hint:
+          examples:
+            - udp
+          type: string
+        query:
+          type: string
+        region:
+          examples:
+            - us-east-1
+          type: string
+        session_id:
+          examples:
+            - gs_9f86d081884c7d659a2feaa0c55ad015
+          type: string
+        status:
+          examples:
+            - matched
+          type: string
+        string_properties:
+          additionalProperties:
+            type: string
+          examples:
+            - map: arena-2
+          type: object
+        users:
+          items:
+            $ref: "#/components/schemas/RosterEntry"
+          type:
+            - array
+            - "null"
+      required:
+        - id
+        - status
+        - mode
+        - region
+        - allow_cross_region
+        - game_mode
+        - min_count
+        - max_count
+        - count_multiple
+        - match_address
+        - created_at
+      type: object
+    OkResult:
+      additionalProperties: false
+      properties:
+        ok:
+          examples:
+            - true
+          type: boolean
+      required:
+        - ok
+      type: object
+    PeerEntry:
+      additionalProperties: false
+      properties:
+        addr:
+          $ref: "#/components/schemas/GameSessionAddr"
+        display_name:
+          examples:
+            - Nova Fox
+          type: string
+        player_id:
+          examples:
+            - 87
+          format: int64
+          type: integer
+        xuid:
+          examples:
+            - "2533274790395904"
+          type: string
+      required:
+        - player_id
+        - addr
+      type: object
+    PlayerVerifyRequest:
+      additionalProperties: false
+      properties:
+        session_token:
+          examples:
+            - eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MiJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+          type: string
+      required:
+        - session_token
+      type: object
+    PlayerVerifyResponse:
+      additionalProperties: false
+      properties:
+        email:
+          examples:
+            - player@example.com
+          type: string
+        external_id:
+          examples:
+            - anon_9f86d081884c7d659a2feaa0c55ad015
+          type: string
+        player_id:
+          examples:
+            - 42
+          format: int64
+          type: integer
+      required:
+        - player_id
+        - external_id
+      type: object
+    PlayersResolveResult:
+      additionalProperties: false
+      properties:
+        players:
+          items:
+            $ref: "#/components/schemas/PublicPlayerResponse"
+          type:
+            - array
+            - "null"
+      required:
+        - players
+      type: object
+    PresenceUpdateRequest:
+      additionalProperties: false
+      properties:
+        session_id:
+          examples:
+            - gs_9f86d081884c7d659a2feaa0c55ad015
+          type: string
+        status:
+          examples:
+            - online
+          maxLength: 32
+          minLength: 1
+          type: string
+      required:
+        - status
+      type: object
+    ProfilePatchRequest:
+      additionalProperties: false
+      properties:
+        display_name:
+          examples:
+            - Nova Fox
+          type: string
+        email:
+          examples:
+            - player@example.com
+          type: string
+        xuid:
+          examples:
+            - "2533274790395904"
+          type: string
+      type: object
+    ProfileResponse:
+      additionalProperties: false
+      properties:
+        created_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+        display_name:
+          examples:
+            - Nova Fox
+          type: string
+        email:
+          examples:
+            - player@example.com
+          type: string
+        email_verified_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+        external_id:
+          examples:
+            - user_1b4e28ba2fa14f0e8bf1a09b4d7e5f60
+          type: string
+        friend_code:
+          examples:
+            - XKCD4242
+          type: string
+        id:
+          examples:
+            - 42
+          format: int64
+          type: integer
+        project_id:
+          examples:
+            - 7
+          format: int64
+          type: integer
+        xuid:
+          examples:
+            - "2533274790395904"
+          type: string
+      required:
+        - id
+        - project_id
+        - external_id
+        - created_at
+      type: object
+    PublicGameSessionEntry:
+      additionalProperties: false
+      properties:
+        created_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          format: date-time
+          type: string
+        host_display_name:
+          examples:
+            - Nova Fox
+          type: string
+        host_player_id:
+          examples:
+            - 87
+          format: int64
+          type: integer
+        max_players:
+          examples:
+            - 8
+          format: int64
+          type: integer
+        player_count:
+          examples:
+            - 3
+          format: int64
+          type: integer
+        props:
+          examples:
+            - map: arena-2
+        session_id:
+          examples:
+            - gs_9f86d081884c7d659a2feaa0c55ad015
+          type: string
+        title_id:
+          examples:
+            - my-game
+          type: string
+      required:
+        - session_id
+        - props
+        - player_count
+        - max_players
+        - host_player_id
+        - created_at
+      type: object
+    PublicPlayerResponse:
+      additionalProperties: false
+      properties:
+        created_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+        display_name:
+          examples:
+            - Nova Fox
+          type: string
+        id:
+          examples:
+            - 42
+          format: int64
+          type: integer
+      required:
+        - id
+        - created_at
+      type: object
+    RefreshRequest:
+      additionalProperties: false
+      properties:
+        refresh_token:
+          examples:
+            - 3f2c8a1d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b
+          minLength: 1
+          type: string
+      required:
+        - refresh_token
+      type: object
+    RemoteAddrEntry:
+      additionalProperties: false
+      properties:
+        address:
+          examples:
+            - 203.0.113.10:7777
+          type: string
+        scope:
+          examples:
+            - public
+          type: string
+        type:
+          examples:
+            - ip
+          type: string
+      type: object
+    RemoteAddrsPayload:
+      additionalProperties: false
+      properties:
+        addresses:
+          items:
+            $ref: "#/components/schemas/RemoteAddrEntry"
+          type:
+            - array
+            - "null"
+      required:
+        - addresses
+      type: object
+    ResendVerifyInputBody:
+      additionalProperties: false
+      properties:
+        email:
+          examples:
+            - player@example.com
+          type: string
+      type: object
+    ResetConfirmInputBody:
+      additionalProperties: false
+      properties:
+        code:
+          examples:
+            - "483920"
+          type: string
+        email:
+          examples:
+            - player@example.com
+          type: string
+        new_password:
+          examples:
+            - correct-horse-battery-staple
+          type: string
+      type: object
+    ResetRequestInputBody:
+      additionalProperties: false
+      properties:
+        email:
+          examples:
+            - player@example.com
+          type: string
+      type: object
+    RosterEntry:
+      additionalProperties: false
+      properties:
+        attributes:
+          examples:
+            - lobby_code: XKCD42
+        numeric_properties:
+          additionalProperties:
+            format: double
+            type: number
+          examples:
+            - skill: 1420.5
+          type: object
+        player_id:
+          examples:
+            - 42
+          format: int64
+          type: integer
+        region:
+          examples:
+            - us-east-1
+          type: string
+        string_properties:
+          additionalProperties:
+            type: string
+          examples:
+            - map: arena-2
+          type: object
+      required:
+        - player_id
+      type: object
+    Server:
+      additionalProperties: false
+      properties:
+        address:
+          examples:
+            - 203.0.113.10:7777
+          type: string
+        current_players:
+          examples:
+            - 12
+          format: int64
+          type: integer
+        game_mode:
+          examples:
+            - ctf
+          type: string
+        level:
+          examples:
+            - arena-2
+          type: string
+        max_players:
+          examples:
+            - 16
+          format: int64
+          type: integer
+        name:
+          examples:
+            - us-east-1-a1
+          type: string
+        region:
+          examples:
+            - us-east-1
+          type: string
+        version:
+          examples:
+            - 1.4.2
+          type: string
+      required:
+        - name
+        - address
+        - region
+        - current_players
+        - max_players
+        - game_mode
+        - level
+        - version
+      type: object
+    ServerSubmitScoreRequest:
+      additionalProperties: false
+      properties:
+        metadata:
+          examples:
+            - ghost: r-42
+        player_id:
+          examples:
+            - 42
+          format: int64
+          minimum: 1
+          type: integer
+        score:
+          examples:
+            - 1500
+          format: int64
+          type: integer
+      required:
+        - player_id
+        - score
+      type: object
+    SessionResponse:
+      additionalProperties: false
+      properties:
+        access_token:
+          examples:
+            - eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MiJ9.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+          type: string
+        expires_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+        player_id:
+          examples:
+            - 42
+          format: int64
+          type: integer
+        refresh_token:
+          examples:
+            - 3f2c8a1d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b
+          type: string
+      required:
+        - access_token
+        - refresh_token
+        - player_id
+        - expires_at
+      type: object
+    SignupRequest:
+      additionalProperties: false
+      properties:
+        email:
+          examples:
+            - player@example.com
+          type: string
+        password:
+          examples:
+            - correct-horse-battery-staple
+          type: string
+      type: object
+    SteamAuthRequest:
+      additionalProperties: false
+      properties:
+        ticket:
+          examples:
+            - 14000000048bcd42aabbccdd
+          maxLength: 8192
+          minLength: 20
+          pattern: ^[0-9a-fA-F]+$
+          type: string
+      required:
+        - ticket
+      type: object
+    StorageListResult:
+      additionalProperties: false
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/StorageObjectListItemResponse"
+          type:
+            - array
+            - "null"
+        next_cursor:
+          examples:
+            - "104"
+          type: string
+      required:
+        - items
+        - next_cursor
+      type: object
+    StorageObjectListItemResponse:
+      additionalProperties: false
+      properties:
+        key:
+          examples:
+            - save-slot-1
+          type: string
+        size_bytes:
+          examples:
+            - 512
+          format: int64
+          type: integer
+        updated_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+        version:
+          examples:
+            - 7
+          format: int64
+          type: integer
+      required:
+        - key
+        - version
+        - updated_at
+        - size_bytes
+      type: object
+    StorageObjectResponse:
+      additionalProperties: false
+      properties:
+        key:
+          examples:
+            - save-slot-1
+          type: string
+        updated_at:
+          examples:
+            - "2026-01-02T15:04:05Z"
+          type: string
+        value:
+          examples:
+            - hp: 100
+              level: 3
+        version:
+          examples:
+            - 7
+          format: int64
+          type: integer
+      required:
+        - key
+        - value
+        - version
+        - updated_at
+      type: object
+    SubmitScoreRequest:
+      additionalProperties: false
+      properties:
+        metadata:
+          examples:
+            - ghost: r-42
+        score:
+          examples:
+            - 1500
+          format: int64
+          type: integer
+      required:
+        - score
+      type: object
+    VerifyRequest:
+      additionalProperties: false
+      properties:
+        code:
+          examples:
+            - "482913"
+          minLength: 1
+          type: string
+        email:
+          examples:
+            - player@example.com
+          minLength: 1
+          type: string
+      required:
+        - email
+        - code
+      type: object
+    VerifyResult:
+      additionalProperties: false
+      properties:
+        player_id:
+          examples:
+            - 42
+          format: int64
+          type: integer
+        verified:
+          examples:
+            - true
+          type: boolean
+      required:
+        - player_id
+        - verified
+      type: object
+  securitySchemes:
+    ApiKeyAuth:
+      description: Tenant API key (publishable or secret).
+      scheme: bearer
+      type: http
+    PlayerSession:
+      description: Player session JWT issued by the /v1/auth endpoints.
+      in: header
+      name: X-Session-Token
+      type: apiKey
+info:
+  contact:
+    name: ggscale
+    url: https://github.com/automoto/gg-scale
+  description: "Player-facing and game-server-facing HTTP API for ggscale. Authenticate with a tenant API key (Authorization: Bearer). Player endpoints additionally require a session token in X-Session-Token."
+  title: ggscale API
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /v1/account/remote-addrs:
+    get:
+      operationId: getAccountRemoteAddrs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteAddrsPayload"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Get the caller's remote addresses
+      tags:
+        - Remote Addresses
+    put:
+      operationId: putAccountRemoteAddrs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemoteAddrsPayload"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteAddrsPayload"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Replace the caller's remote addresses
+      tags:
+        - Remote Addresses
+  /v1/auth/anonymous:
+    post:
+      operationId: authAnonymous
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnonymousResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Create an anonymous player session
+      tags:
+        - Authentication
+  /v1/auth/custom-token:
+    post:
+      description: The developer's backend signs a short-lived JWT (EdDSA or RS256, aud "ggscale-custom-token", required exp, an external_id claim) with its private key; ggscale verifies it against the public key configured in the control panel and signs the player in, creating the player on first sign-in.
+      operationId: authCustomToken
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomTokenRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Exchange a tenant-signed token for a session
+      tags:
+        - Authentication
+  /v1/auth/disable:
+    post:
+      description: "Self-service deactivation: revokes every session immediately and blocks sign-in. Players with credentials must re-authenticate with their password; anonymous players disable on the session alone. A project admin can re-enable the player with all data intact. Permanent deletion is requested through the account pages."
+      operationId: disablePlayer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisableInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Disable the calling player
+      tags:
+        - Authentication
+  /v1/auth/link:
+    post:
+      description: "The in-client upgrade path for anonymous players: the player id and every save, score, and friend stay untouched. A verification code is emailed; after POST /v1/auth/verify the credentials work on any device, and verification also links the global gg-scale account (unlocking display names and friends). An email another player in the project uses is a 409."
+      operationId: linkEmail
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkEmailRequest"
+        required: true
+      responses:
+        "202":
+          description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Attach email + password sign-in to the calling player
+      tags:
+        - Authentication
+  /v1/auth/link/steam:
+    post:
+      description: Verifies a Steamworks session ticket (see POST /v1/auth/steam) and replaces the caller's generated identity with the Steam identity, so later native Steam sign-ins resolve to this player with all data intact. Only anonymous or email-signup identities can link; a Steam identity another player holds, or a developer-keyed custom-token identity, is a 409.
+      operationId: linkSteam
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SteamAuthRequest"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Attach a Steam identity to the calling player
+      tags:
+        - Authentication
+  /v1/auth/login:
+    post:
+      operationId: authLogin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Log in with email and password
+      tags:
+        - Authentication
+  /v1/auth/logout:
+    post:
+      operationId: authLogout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Revoke a refresh token
+      tags:
+        - Authentication
+  /v1/auth/password:
+    post:
+      description: Requires the current password. Revokes every refresh token so other devices must sign in again; the caller's live access token keeps working until it expires.
+      operationId: changePassword
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Change the calling player's password
+      tags:
+        - Authentication
+  /v1/auth/password-reset:
+    post:
+      description: Emails a reset code when the address belongs to a player of the project. Always answers 202 — the response never reveals whether an account exists. Repeat requests inside a one-minute cooldown send nothing. Finish with POST /v1/auth/password-reset/confirm.
+      operationId: requestPasswordReset
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetRequestInputBody"
+        required: true
+      responses:
+        "202":
+          description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Request an in-client password reset code
+      tags:
+        - Authentication
+  /v1/auth/password-reset/confirm:
+    post:
+      description: Sets the new password and revokes every existing session and refresh token for the player. Wrong codes are capped per code and per lifetime; a rejected new password does not consume the code.
+      operationId: confirmPasswordReset
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetConfirmInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Confirm a password reset with the emailed code
+      tags:
+        - Authentication
+  /v1/auth/refresh:
+    post:
+      operationId: authRefresh
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Rotate a refresh token
+      tags:
+        - Authentication
+  /v1/auth/signup:
+    post:
+      operationId: authSignup
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+        required: true
+      responses:
+        "202":
+          description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Sign up with email and password
+      tags:
+        - Authentication
+  /v1/auth/steam:
+    post:
+      description: Verifies a Steamworks session ticket with Valve and signs the player in, creating the player on first sign-in. Obtain the ticket with ISteamUser::GetAuthTicketForWebApi("ggscale") and hex-encode it. Requires the project's Steam credentials to be configured in the control panel. 401 means Valve rejected the ticket (fetch a fresh one); 502 means Valve was unreachable (retry with backoff).
+      operationId: authSteam
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SteamAuthRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Exchange a Steam session ticket for a session
+      tags:
+        - Authentication
+  /v1/auth/verify:
+    post:
+      operationId: authVerify
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Verify an email address with a code
+      tags:
+        - Authentication
+  /v1/auth/verify/resend:
+    post:
+      description: Mints a fresh code (replacing the old one) when the address belongs to an unverified player, subject to a one-minute cooldown. Always answers 202. Signing up again with an existing email also answers 202 and sends a sign-in notice instead of a duplicate account.
+      operationId: resendVerification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendVerifyInputBody"
+        required: true
+      responses:
+        "202":
+          description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Resend the email verification code
+      tags:
+        - Authentication
+  /v1/config:
+    get:
+      description: Returns the project-defined JSON object using only a project-pinned tenant API key. Send If-None-Match with a previous ETag to receive 304 when unchanged.
+      operationId: getRemoteConfig
+      parameters:
+        - description: ETag from a previous config response.
+          in: header
+          name: If-None-Match
+          schema:
+            description: ETag from a previous config response.
+            examples:
+              - "\"remote-config-5f36b2ea290645ee34d943220a14b54ee5ea5be5b2ac97498f75ee173db9e9df\""
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                description: Arbitrary project-defined JSON key-value map.
+                examples:
+                  - daily_reward_multiplier: 1.5
+                    maintenance_mode: false
+                    minimum_client_version: 1.4.0
+                type: object
+          description: Current remote config
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+            ETag:
+              schema:
+                description: Validator for the current project config.
+                type: string
+        "304":
+          description: Config has not changed; response has no body
+      security:
+        - ApiKeyAuth: []
+      summary: Get the project's remote config
+      tags:
+        - Remote Config
+  /v1/fleets/heartbeat:
+    post:
+      operationId: fleetHeartbeat
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HeartbeatRequest"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: Game-server liveness heartbeat
+      tags:
+        - Game Server Fleet
+  /v1/fleets/{fleet}/servers:
+    get:
+      operationId: fleetServersList
+      parameters:
+        - in: path
+          name: fleet
+          required: true
+          schema:
+            examples:
+              - default
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListServersResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: List live servers in a fleet
+      tags:
+        - Game Server Fleet
+  /v1/friends:
+    get:
+      operationId: listFriends
+      parameters:
+        - explode: false
+          in: query
+          name: status
+          schema:
+            examples:
+              - accepted
+            type: string
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            examples:
+              - "50"
+            type: string
+        - explode: false
+          in: query
+          name: cursor
+          schema:
+            examples:
+              - "104"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendsListResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: List the caller's friends by status
+      tags:
+        - Friends & Presence
+  /v1/friends/{player_id}:
+    delete:
+      operationId: deleteFriend
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            examples:
+              - 87
+            format: int64
+            minimum: 1
+            type: integer
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Remove a friend
+      tags:
+        - Friends & Presence
+  /v1/friends/{player_id}/accept:
+    post:
+      operationId: acceptFriend
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            examples:
+              - 87
+            format: int64
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendStatusResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Accept a friend request
+      tags:
+        - Friends & Presence
+  /v1/friends/{player_id}/block:
+    post:
+      operationId: blockFriend
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            examples:
+              - 87
+            format: int64
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendStatusResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Block a player
+      tags:
+        - Friends & Presence
+  /v1/friends/{player_id}/reject:
+    post:
+      operationId: rejectFriend
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            examples:
+              - 87
+            format: int64
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendStatusResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Reject a friend request
+      tags:
+        - Friends & Presence
+  /v1/friends/{player_id}/remote-addrs:
+    get:
+      operationId: getFriendRemoteAddrs
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            format: int64
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteAddrsPayload"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Get an accepted friend's remote addresses
+      tags:
+        - Remote Addresses
+  /v1/friends/{player_id}/request:
+    post:
+      operationId: requestFriend
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            examples:
+              - 87
+            format: int64
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendStatusResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Send a friend request
+      tags:
+        - Friends & Presence
+  /v1/friends/{player_id}/unblock:
+    post:
+      operationId: unblockFriend
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            examples:
+              - 87
+            format: int64
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendStatusResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Unblock a player
+      tags:
+        - Friends & Presence
+  /v1/game-session:
+    get:
+      operationId: resolveGameSession
+      parameters:
+        - explode: false
+          in: query
+          name: joinCode
+          schema:
+            examples:
+              - XKCD42
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSessionResolveResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Resolve a game session by join code
+      tags:
+        - Game Sessions & Invites
+    post:
+      description: Creates a session with a one-hour lifetime window. Member heartbeats slide the window forward, so an active session stays alive for the length of the match while an idle one expires within the hour. When the match ends, the host should DELETE the session — that frees the project's open-session slot immediately instead of waiting for expiry.
+      operationId: createGameSession
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameSessionCreateRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSessionResponse"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Create a game session
+      tags:
+        - Game Sessions & Invites
+  /v1/game-session/{id}:
+    delete:
+      description: A joiner is removed from the roster; the host ends the session for everyone. Call this from the host when the match ends — an ended session stops counting against the project's open-session limit immediately.
+      operationId: leaveGameSession
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - gs_9f86d081884c7d659a2feaa0c55ad015
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Leave (or, for the host, end) a game session
+      tags:
+        - Game Sessions & Invites
+    get:
+      operationId: getGameSession
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - gs_9f86d081884c7d659a2feaa0c55ad015
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSessionResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Get a game session
+      tags:
+        - Game Sessions & Invites
+  /v1/game-session/{id}/heartbeat:
+    post:
+      description: Marks the caller's peer as alive and returns the current roster. A member heartbeat also extends the session's expiry when under 30 minutes remain, keeping active matches alive past the one-hour default window.
+      operationId: heartbeatGameSession
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - gs_9f86d081884c7d659a2feaa0c55ad015
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameSessionHeartbeatRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSessionHeartbeatResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Heartbeat a game session peer
+      tags:
+        - Game Sessions & Invites
+  /v1/game-session/{id}/join:
+    post:
+      operationId: joinGameSession
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - gs_9f86d081884c7d659a2feaa0c55ad015
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameSessionJoinRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSessionResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Join a game session
+      tags:
+        - Game Sessions & Invites
+  /v1/game-session/{id}/signals:
+    get:
+      operationId: pollGameSessionSignals
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - gs_9f86d081884c7d659a2feaa0c55ad015
+            type: string
+        - explode: false
+          in: query
+          name: after_id
+          schema:
+            examples:
+              - 512
+            format: int64
+            minimum: 0
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSessionSignalPollResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Poll game-session negotiation signals
+      tags:
+        - Game Sessions & Invites
+    post:
+      operationId: sendGameSessionSignal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - gs_9f86d081884c7d659a2feaa0c55ad015
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameSessionSignalRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSessionSignalSendResult"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Send a game-session negotiation signal
+      tags:
+        - Game Sessions & Invites
+  /v1/game-sessions:
+    get:
+      description: "The server browser: lists open, public, non-full sessions in the caller's project. Player counts and liveness come from member heartbeats — a session with no heartbeat in the last 30 seconds is not listed. Filter by title_id; page with limit and cursor (next_cursor from the previous page). Join a listed session with POST /v1/game-session/{id}/join. Complements the matchmaker and join codes; private sessions are never listed."
+      operationId: listGameSessions
+      parameters:
+        - explode: false
+          in: query
+          name: title_id
+          schema:
+            examples:
+              - my-game
+            type: string
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            examples:
+              - "50"
+            type: string
+        - explode: false
+          in: query
+          name: cursor
+          schema:
+            examples:
+              - gs_9f86d081884c7d659a2feaa0c55ad015
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSessionListResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Browse public game sessions
+      tags:
+        - Game Sessions & Invites
+  /v1/healthz:
+    get:
+      operationId: healthz
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthzResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Liveness probe
+      tags:
+        - Health
+  /v1/invite:
+    get:
+      operationId: listGameInvites
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameInviteListOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: List the caller's pending game invites
+      tags:
+        - Game Sessions & Invites
+    post:
+      operationId: createGameInvite
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameInviteCreateRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameInviteCreateOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Invite a friend to a game session
+      tags:
+        - Game Sessions & Invites
+  /v1/invite/{id}:
+    delete:
+      operationId: deleteGameInvite
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 314
+            format: int64
+            type: integer
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Cancel or dismiss a game invite
+      tags:
+        - Game Sessions & Invites
+  /v1/leaderboards:
+    get:
+      description: "Runtime discovery: board ids, sort order, score operator, period state, submission policy, and the developer-defined metadata blob — no hardcoded ids needed in the client."
+      operationId: listLeaderboards
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardListResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: List the project's leaderboards
+      tags:
+        - Leaderboards
+  /v1/leaderboards/{id}/around-me:
+    get:
+      operationId: leaderboardAroundMe
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 1
+            format: int64
+            minimum: 1
+            type: integer
+        - explode: false
+          in: query
+          name: radius
+          schema:
+            examples:
+              - "5"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardAroundMeResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Scores around the caller's rank
+      tags:
+        - Leaderboards
+  /v1/leaderboards/{id}/friends:
+    get:
+      description: Current-period entries for the caller plus accepted friends who are players in this project, ranked within that group (0-based). The caller is always included when they have a score, even below a full page of higher-ranked friends. An unlinked caller sees only their own entry.
+      operationId: leaderboardFriends
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 1
+            format: int64
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardTopResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Scores of the caller and their accepted friends
+      tags:
+        - Leaderboards
+  /v1/leaderboards/{id}/periods:
+    get:
+      description: The board's current period and its finished periods, newest first, keyset-paginated on the period number. Entries of a finished period stay readable via the period top route.
+      operationId: listLeaderboardPeriods
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 1
+            format: int64
+            minimum: 1
+            type: integer
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            examples:
+              - "50"
+            type: string
+        - explode: false
+          in: query
+          name: cursor
+          schema:
+            examples:
+              - "12"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardPeriodsResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Reset history of a leaderboard
+      tags:
+        - Leaderboards
+  /v1/leaderboards/{id}/periods/{period}/top:
+    get:
+      description: Like the top route, for any period up to and including the current one. A period the board has not reached is 404.
+      operationId: leaderboardPeriodTop
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 1
+            format: int64
+            minimum: 1
+            type: integer
+        - in: path
+          name: period
+          required: true
+          schema:
+            examples:
+              - 12
+            format: int32
+            minimum: 0
+            type: integer
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            examples:
+              - "10"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardTopResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Top scores of one leaderboard period
+      tags:
+        - Leaderboards
+  /v1/leaderboards/{id}/scores:
+    post:
+      description: Server-authoritative boards require a secret API key. Boards with client_submissions enabled also accept the player's publishable-key session, rate limited per player and validated against the board's score bounds.
+      operationId: submitScore
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 1
+            format: int64
+            minimum: 1
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitScoreRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Submit a score to a leaderboard
+      tags:
+        - Leaderboards
+  /v1/leaderboards/{id}/top:
+    get:
+      operationId: leaderboardTop
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 1
+            format: int64
+            minimum: 1
+            type: integer
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            examples:
+              - "10"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardTopResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Top scores for a leaderboard
+      tags:
+        - Leaderboards
+  /v1/matchmaker/tickets:
+    post:
+      operationId: createMatchmakerTicket
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchmakerTicketRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchmakerTicketResponse"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Create a matchmaking ticket
+      tags:
+        - Matchmaking
+  /v1/matchmaker/tickets/{id}:
+    delete:
+      operationId: cancelMatchmakerTicket
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 9001
+            format: int64
+            type: integer
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Cancel a matchmaking ticket
+      tags:
+        - Matchmaking
+    get:
+      operationId: getMatchmakerTicket
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 9001
+            format: int64
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchmakerTicketResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Get a matchmaking ticket
+      tags:
+        - Matchmaking
+  /v1/players:
+    get:
+      description: Batch lookup of up to 100 comma-separated ids. Unknown ids and ids from other projects are omitted from the result.
+      operationId: resolvePlayers
+      parameters:
+        - explode: false
+          in: query
+          name: ids
+          schema:
+            examples:
+              - 42,87,101
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayersResolveResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Resolve player ids to public profiles
+      tags:
+        - Player Profiles
+  /v1/players/by-code/{code}:
+    get:
+      description: Case-insensitive; dashes and spaces are ignored. Returns public fields only — use the resolved id with POST /v1/friends/{player_id}/request. Codes are 8 characters from a 32-letter alphabet and the endpoint sits behind the per-player rate limit, so code scanning is impractical. Unknown and cross-project codes are 404.
+      operationId: resolveFriendCode
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            examples:
+              - XKCD4242
+            maxLength: 32
+            minLength: 1
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicPlayerResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Resolve a friend code to a public player
+      tags:
+        - Friends & Presence
+  /v1/players/{id}:
+    get:
+      description: "Public fields only — never the account email. Project-scoped: an id from another project returns 404."
+      operationId: getPlayer
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 42
+            format: int64
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicPlayerResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Get a player's public profile
+      tags:
+        - Player Profiles
+  /v1/presence:
+    put:
+      operationId: updatePresence
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresenceUpdateRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Update the caller's presence
+      tags:
+        - Friends & Presence
+  /v1/profile:
+    get:
+      operationId: getProfile
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Get the caller's profile
+      tags:
+        - Player Profiles
+    patch:
+      description: Setting display_name requires a linked gg-scale account; an empty string clears it.
+      operationId: patchProfile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfilePatchRequest"
+        required: true
+      responses:
+        "202":
+          description: Accepted
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Update the caller's email, xuid, or display name
+      tags:
+        - Player Profiles
+  /v1/profile/friend-code:
+    post:
+      description: Mints a new code and invalidates the old one immediately. The current code is on GET /v1/profile.
+      operationId: regenerateFriendCode
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendCodeResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Regenerate the caller's friend code
+      tags:
+        - Friends & Presence
+  /v1/relay/credentials:
+    post:
+      operationId: issueRelayCredentials
+      parameters:
+        - explode: false
+          in: query
+          name: match_id
+          schema:
+            examples:
+              - mm_5f3a9c1d2e4b6a70
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credentials"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Issue short-lived TURN-REST relay credentials
+      tags:
+        - P2P & TURN Relay
+  /v1/server/leaderboards/{id}/scores:
+    post:
+      operationId: serverSubmitScore
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            examples:
+              - 1
+            format: int64
+            minimum: 1
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerSubmitScoreRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: "Server-tier: submit a score for a player"
+      tags:
+        - Leaderboards
+  /v1/server/player-sessions/verify:
+    post:
+      operationId: verifyPlayerSession
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerVerifyRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerVerifyResponse"
+          description: OK
+        "401":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    type: string
+                type: object
+          description: Invalid session (opaque; covers every failure mode)
+      security:
+        - ApiKeyAuth: []
+      summary: "Server-tier: verify a player session token"
+      tags:
+        - Session Verification
+  /v1/server/players/{player_id}/remote-addrs:
+    get:
+      operationId: serverGetPlayerRemoteAddrs
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            format: int64
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoteAddrsPayload"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: "Server-tier: read a player's remote addresses"
+      tags:
+        - Remote Addresses
+  /v1/server/players/{player_id}/storage/objects:
+    get:
+      operationId: serverListStorageObjects
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            examples:
+              - 42
+            format: int64
+            minimum: 1
+            type: integer
+        - explode: false
+          in: query
+          name: key_prefix
+          schema:
+            examples:
+              - save-
+            type: string
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            examples:
+              - "50"
+            type: string
+        - explode: false
+          in: query
+          name: cursor
+          schema:
+            examples:
+              - "104"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageListResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: "Server-tier: list a player's storage objects"
+      tags:
+        - Cloud Saves
+  /v1/server/players/{player_id}/storage/objects/{key}:
+    get:
+      operationId: serverGetStorageObject
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            examples:
+              - 42
+            format: int64
+            minimum: 1
+            type: integer
+        - in: path
+          name: key
+          required: true
+          schema:
+            examples:
+              - save-slot-1
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageObjectResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: "Server-tier: get a player's storage object"
+      tags:
+        - Cloud Saves
+    put:
+      operationId: serverPutStorageObject
+      parameters:
+        - in: path
+          name: player_id
+          required: true
+          schema:
+            examples:
+              - 42
+            format: int64
+            minimum: 1
+            type: integer
+        - in: path
+          name: key
+          required: true
+          schema:
+            examples:
+              - save-slot-1
+            type: string
+        - in: header
+          name: If-Match
+          schema:
+            examples:
+              - "7"
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: "Any JSON value to store: object, array, string, number, boolean, or null."
+              examples:
+                - hp: 100
+                  level: 3
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageObjectResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+      summary: "Server-tier: create or replace a player's storage object"
+      tags:
+        - Cloud Saves
+  /v1/storage/objects:
+    get:
+      operationId: listStorageObjects
+      parameters:
+        - explode: false
+          in: query
+          name: key_prefix
+          schema:
+            examples:
+              - save-
+            type: string
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            examples:
+              - "50"
+            type: string
+        - explode: false
+          in: query
+          name: cursor
+          schema:
+            examples:
+              - "104"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageListResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: List the caller's storage objects
+      tags:
+        - Cloud Saves
+  /v1/storage/objects/{key}:
+    delete:
+      operationId: deleteStorageObject
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            examples:
+              - save-slot-1
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Delete a storage object
+      tags:
+        - Cloud Saves
+    get:
+      operationId: getStorageObject
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            examples:
+              - save-slot-1
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageObjectResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Get a storage object
+      tags:
+        - Cloud Saves
+    put:
+      operationId: putStorageObject
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            examples:
+              - save-slot-1
+            type: string
+        - in: header
+          name: If-Match
+          schema:
+            examples:
+              - "7"
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: "Any JSON value to store: object, array, string, number, boolean, or null."
+              examples:
+                - hp: 100
+                  level: 3
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageObjectResponse"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Create or replace a storage object
+      tags:
+        - Cloud Saves
+  /v1/ws:
+    get:
+      description: Upgrades to a WebSocket for realtime player events; not a JSON endpoint. Authenticate with the tenant API key and the player session token.
+      operationId: realtimeWebSocket
+      responses:
+        "101":
+          description: Switching Protocols (WebSocket upgrade)
+      security:
+        - ApiKeyAuth: []
+          PlayerSession: []
+      summary: Realtime WebSocket channel
+      tags:
+        - Realtime
+servers:
+  - description: Local development server (default HTTP_ADDR)
+    url: http://localhost:8080
+  - description: Self-hosted or managed deployment
+    url: https://{host}
+    variables:
+      host:
+        default: ggscale.example.com
+tags:
+  - description: "Player sign-in and session tokens: email/password, anonymous, and custom-token."
+    name: Authentication
+  - description: Project-defined live tuning values available before player login.
+    name: Remote Config
+  - description: "Per-project player identity: email and external console id."
+    name: Player Profiles
+  - description: Per-player JSON object storage with optimistic concurrency.
+    name: Cloud Saves
+  - description: Ranked scoreboards with server-authoritative score submission.
+    name: Leaderboards
+  - description: Friend requests, blocks, and online presence.
+    name: Friends & Presence
+  - description: Pre-game rooms with join codes, plus short-lived invites.
+    name: Game Sessions & Invites
+  - description: Tickets that return a roster, a game session, or a fleet allocation.
+    name: Matchmaking
+  - description: The WebSocket channel for presence, invites, and match events.
+    name: Realtime
+  - description: Short-lived TURN credentials for NAT traversal.
+    name: P2P & TURN Relay
+  - description: A player's opaque connect handles, such as a Steam id.
+    name: Remote Addresses
+  - description: Dedicated-server heartbeat and fleet listing. Beta.
+    name: Game Server Fleet
+  - description: Server-tier check of a player session token.
+    name: Session Verification
+  - description: Liveness probe.
+    name: Health

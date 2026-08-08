@@ -32,6 +32,8 @@ type AnonymousAuth struct {
 	store     SessionStore
 }
 
+// SessionStore persists player sessions. Production implementations should
+// use the operating system's keychain or credential vault.
 type SessionStore interface {
 	Load() (*Session, error)
 	Save(*Session) error
@@ -41,10 +43,15 @@ type SessionStore interface {
 // NewAnonymousAuth builds an Authenticator that calls /v1/auth/anonymous.
 // storePath is where the SDK persists the session between runs; pass ""
 // for ephemeral (test) use. See DefaultSessionPath for a sensible default.
+// A non-empty path stores bearer credentials in a mode-0600 plaintext file;
+// production games should prefer NewAnonymousAuthWithStore backed by the
+// platform keychain or credential vault.
 func NewAnonymousAuth(t Transport, apiKey, storePath string) *AnonymousAuth {
 	return &AnonymousAuth{transport: t, apiKey: apiKey, storePath: storePath}
 }
 
+// NewAnonymousAuthWithStore builds anonymous authentication backed by a
+// caller-supplied, preferably platform-secure session store.
 func NewAnonymousAuthWithStore(t Transport, apiKey string, store SessionStore) *AnonymousAuth {
 	return &AnonymousAuth{transport: t, apiKey: apiKey, store: store}
 }
@@ -65,9 +72,10 @@ func (a *AnonymousAuth) Authenticate(ctx context.Context) (*Session, error) {
 	}
 	var resp sessionResponse
 	err := a.transport.Call(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/auth/anonymous",
-		APIKey: a.apiKey,
+		OperationID: "authAnonymous",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/anonymous",
+		APIKey:      a.apiKey,
 	}, &resp)
 	if err != nil {
 		return nil, err
@@ -93,7 +101,14 @@ func (a *AnonymousAuth) SaveSession(s *Session) {
 			_ = a.store.Save(s)
 		}
 	}
-	if a.storePath == "" || s == nil {
+	if a.storePath == "" {
+		return
+	}
+	if s == nil {
+		// SetSession(nil), Auth.Disable, and Auth.Logout revoke the persisted
+		// identity as well as clearing memory. Ignore a missing file so the
+		// callback remains safely idempotent.
+		_ = os.Remove(a.storePath)
 		return
 	}
 	_ = saveSessionFile(a.storePath, s)
@@ -101,7 +116,8 @@ func (a *AnonymousAuth) SaveSession(s *Session) {
 
 // DefaultSessionPath returns a per-game session file under
 // os.UserConfigDir(), falling back to os.TempDir() when no config dir
-// is available. The directory is created on save.
+// is available. The directory is created on save. The file is plaintext;
+// production games should prefer a platform-secure SessionStore.
 func DefaultSessionPath(gameID string) string {
 	cfg, err := os.UserConfigDir()
 	if err != nil || cfg == "" {

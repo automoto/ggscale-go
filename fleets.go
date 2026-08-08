@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 )
 
 // FleetsService exposes the server-browser endpoints.
@@ -63,10 +64,11 @@ func (s *FleetsService) SendHeartbeat(ctx context.Context, hb Heartbeat) error {
 		return errors.New("ggscale: heartbeat max_players must be > 0")
 	}
 	return s.c.transport.Call(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/fleets/heartbeat",
-		APIKey: s.c.apiKey,
-		Body:   hb,
+		OperationID: "fleetHeartbeat",
+		Method:      http.MethodPost,
+		Path:        "/v1/fleets/heartbeat",
+		APIKey:      s.c.apiKey,
+		Body:        hb,
 	}, nil)
 }
 
@@ -79,8 +81,9 @@ func (s *FleetsService) ListServers(ctx context.Context, fleet string) ([]Server
 	}
 	var resp listServersResponse
 	err := s.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   "/v1/fleets/" + fleet + "/servers",
+		OperationID: "fleetServersList",
+		Method:      http.MethodGet,
+		Path:        "/v1/fleets/" + url.PathEscape(fleet) + "/servers",
 	}, &resp)
 	if err != nil {
 		return nil, err

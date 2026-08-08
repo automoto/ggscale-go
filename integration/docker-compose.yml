@@ -23,7 +23,7 @@ services:
   ggscale:
     # Pinned to an immutable release tag so contract tests can't silently
     # drift against a moving `latest`. Override with GGSCALE_IMAGE.
-    image: ${GGSCALE_IMAGE:-buildwrangler/ggscale:v0.9.0}
+    image: ${GGSCALE_IMAGE:-buildwrangler/ggscale:v0.9.4}
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,11 +42,12 @@ services:
       # Enable the TURN relay so the p2p_relay integration test can mint
       # credentials. Without both of these the RelayIssuer stays nil and
       # the route is unmounted (404). There is no real TURN server in this
-      # single-node stack, so issued credentials carry an empty urls list —
-      # the test asserts credential fields, not an actual relay handshake.
+      # single-node stack; the advertised URI is intentionally non-routable
+      # and the test asserts credentials, not an actual relay handshake.
       FEATURE_P2P_RELAY_ENABLED: "true"
       # Must be >= 32 bytes (server enforces this when relay is enabled).
       RELAY_SHARED_SECRET: integration-relay-shared-secret-0123456789
+      RELAY_URLS: turn:relay.invalid:3478?transport=udp
     ports:
       # 18080 so the stack can run alongside a dev server on 8080.
       - "127.0.0.1:18080:8080"

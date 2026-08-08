@@ -57,9 +57,9 @@ func main() {
 	}
 	fmt.Printf("settings: %s\n", settings.Value)
 
-	// Read a leaderboard. Score *submission* is server-authoritative and
-	// lives on the server tier (Client.Server.SubmitScore, secret key) —
-	// a publishable-key game client only reads. See docs/leaderboards-p2p.md.
+	// Read a leaderboard. Competitive submission should use the server tier
+	// (Client.Server.SubmitScore with a secret key). Leaderboards.Submit is
+	// for boards explicitly configured for untrusted client writes.
 	const leaderboardID int64 = 1
 	top, err := c.Leaderboards.Top(ctx, leaderboardID, 5)
 	if err != nil {

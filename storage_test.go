@@ -139,6 +139,26 @@ func TestStorage_Put_with_IfMatch_sends_if_match_header(t *testing.T) {
 	assert.Equal(t, "1", ft.gotReq.IfMatch)
 }
 
+func TestStorage_Put_nil_sends_json_null(t *testing.T) {
+	ft := &fakeTransport{
+		respond: func(*Request) (any, error) {
+			return map[string]any{
+				"key":        "nullable",
+				"value":      json.RawMessage("null"),
+				"version":    int64(1),
+				"updated_at": time.Now().UTC().Format(time.RFC3339),
+			}, nil
+		},
+	}
+	c := newClientWithFake(t, ft)
+
+	_, err := c.Storage.Put(context.Background(), "nullable", nil)
+	require.NoError(t, err)
+	raw, ok := ft.gotReq.Body.(json.RawMessage)
+	require.True(t, ok)
+	assert.JSONEq(t, "null", string(raw))
+}
+
 func TestStorage_Put_OCC_conflict_returns_ErrConflict(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusPreconditionFailed)

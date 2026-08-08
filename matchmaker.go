@@ -156,9 +156,10 @@ const defaultMatchPollInterval = 2 * time.Second
 func (m *MatchmakerService) CreateTicket(ctx context.Context, req MatchRequest) (*Ticket, error) {
 	var ticket Ticket
 	err := m.c.callProtected(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/matchmaker/tickets",
-		Body:   req,
+		OperationID: "createMatchmakerTicket",
+		Method:      http.MethodPost,
+		Path:        "/v1/matchmaker/tickets",
+		Body:        req,
 	}, &ticket)
 	if err != nil {
 		return nil, err
@@ -172,8 +173,9 @@ func (m *MatchmakerService) CreateTicket(ctx context.Context, req MatchRequest) 
 func (m *MatchmakerService) GetTicket(ctx context.Context, id int64) (*Ticket, error) {
 	var ticket Ticket
 	err := m.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   "/v1/matchmaker/tickets/" + strconv.FormatInt(id, 10),
+		OperationID: "getMatchmakerTicket",
+		Method:      http.MethodGet,
+		Path:        "/v1/matchmaker/tickets/" + strconv.FormatInt(id, 10),
 	}, &ticket)
 	if err != nil {
 		return nil, err
@@ -185,8 +187,9 @@ func (m *MatchmakerService) GetTicket(ctx context.Context, id int64) (*Ticket, e
 // unknown, or ErrConflict if it has already reached a terminal status.
 func (m *MatchmakerService) CancelTicket(ctx context.Context, id int64) error {
 	return m.c.callProtected(ctx, &Request{
-		Method: http.MethodDelete,
-		Path:   "/v1/matchmaker/tickets/" + strconv.FormatInt(id, 10),
+		OperationID: "cancelMatchmakerTicket",
+		Method:      http.MethodDelete,
+		Path:        "/v1/matchmaker/tickets/" + strconv.FormatInt(id, 10),
 	}, nil)
 }
 
@@ -281,9 +284,13 @@ func (m *MatchmakerService) RequestMatch(ctx context.Context, req MatchRequest) 
 // coordination data; opening the actual peer connections (direct where
 // possible, relayed via Relay as a fallback) is the game's responsibility.
 type P2PMatch struct {
-	Result  *MatchResult
-	Relay   *Credentials
-	Session *GameSession
+	Result *MatchResult
+	Relay  *Credentials
+	// RelayError preserves a best-effort credential failure. Direct peer
+	// connectivity can still proceed, but relay-dependent games should stop or
+	// surface the metering/configuration error instead of silently degrading.
+	RelayError error
+	Session    *GameSession
 	// IsHost reports whether the local player is the designated host.
 	IsHost bool
 }
@@ -311,6 +318,8 @@ func (m *MatchmakerService) ConnectP2P(ctx context.Context, req MatchRequest, se
 	// project, and direct connections often need no relay at all.
 	if creds, rerr := m.c.Relay.GetCredentials(ctx, WithMatch(res.MatchID)); rerr == nil {
 		out.Relay = creds
+	} else {
+		out.RelayError = rerr
 	}
 	if res.Mode == string(ModeGameSession) && res.SessionID != "" {
 		sess, jerr := m.c.GameSessions.Join(ctx, res.SessionID, selfAddr)

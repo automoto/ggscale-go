@@ -3,6 +3,7 @@ package ggscale
 import (
 	"context"
 	"encoding/json"
+	"iter"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -76,8 +77,9 @@ func IfMatch(version int64) PutOption {
 func (s *StorageService) Get(ctx context.Context, key string) (*Object, error) {
 	var obj Object
 	err := s.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   storagePath(key),
+		OperationID: "getStorageObject",
+		Method:      http.MethodGet,
+		Path:        storagePath(key),
 	}, &obj)
 	if err != nil {
 		return nil, err
@@ -95,11 +97,16 @@ func (s *StorageService) Put(ctx context.Context, key string, value any, opts ..
 		o(&cfg)
 	}
 	var obj Object
+	body := value
+	if body == nil {
+		body = json.RawMessage("null")
+	}
 	err := s.c.callProtected(ctx, &Request{
-		Method:  http.MethodPut,
-		Path:    storagePath(key),
-		Body:    value,
-		IfMatch: cfg.ifMatch,
+		OperationID: "putStorageObject",
+		Method:      http.MethodPut,
+		Path:        storagePath(key),
+		Body:        body,
+		IfMatch:     cfg.ifMatch,
 	}, &obj)
 	if err != nil {
 		return nil, err
@@ -111,8 +118,9 @@ func (s *StorageService) Put(ctx context.Context, key string, value any, opts ..
 // ErrNotFound.
 func (s *StorageService) Delete(ctx context.Context, key string) error {
 	return s.c.callProtected(ctx, &Request{
-		Method: http.MethodDelete,
-		Path:   storagePath(key),
+		OperationID: "deleteStorageObject",
+		Method:      http.MethodDelete,
+		Path:        storagePath(key),
 	}, nil)
 }
 
@@ -133,14 +141,28 @@ func (s *StorageService) List(ctx context.Context, opts ListOptions) (*ObjectPag
 	}
 	var page ObjectPage
 	err := s.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   "/v1/storage/objects",
-		Query:  q,
+		OperationID: "listStorageObjects",
+		Method:      http.MethodGet,
+		Path:        "/v1/storage/objects",
+		Query:       q,
 	}, &page)
 	if err != nil {
 		return nil, err
 	}
 	return &page, nil
+}
+
+// All iterates every storage metadata item across cursor pages. Iteration
+// stops on the first error or when the caller stops ranging.
+func (s *StorageService) All(ctx context.Context, opts ListOptions) iter.Seq2[StorageObjectMetadata, error] {
+	return cursorSequence(opts.Cursor, func(cursor string) ([]StorageObjectMetadata, string, error) {
+		opts.Cursor = cursor
+		page, err := s.List(ctx, opts)
+		if err != nil {
+			return nil, "", err
+		}
+		return page.Items, page.NextCursor, nil
+	})
 }
 
 func storagePath(key string) string {

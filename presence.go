@@ -22,8 +22,9 @@ type presenceUpdateBody struct {
 // WebSocket receive the update as a "presence" message.
 func (p *PresenceService) Set(ctx context.Context, status string, sessionID *string) error {
 	return p.c.callProtected(ctx, &Request{
-		Method: http.MethodPut,
-		Path:   "/v1/presence",
-		Body:   presenceUpdateBody{Status: status, SessionID: sessionID},
+		OperationID: "updatePresence",
+		Method:      http.MethodPut,
+		Path:        "/v1/presence",
+		Body:        presenceUpdateBody{Status: status, SessionID: sessionID},
 	}, nil)
 }

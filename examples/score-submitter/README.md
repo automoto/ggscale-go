@@ -1,13 +1,12 @@
 # Score submitter
 
 A runnable reference for **authoritative leaderboard submission in a
-peer-to-peer game**. See [`docs/leaderboards-p2p.md`](../../docs/leaderboards-p2p.md)
-for the why.
+peer-to-peer game**.
 
-Leaderboard writes are server-authoritative: ggscale requires a **secret** API
-key to submit a score, so a player client cannot submit directly (and must
-never hold the secret key). This small service holds the secret key on trusted
-compute and submits on a player's behalf after verifying their session.
+Authoritative leaderboard writes require a **secret** API key, which a player
+client must never hold. This small service holds the key on trusted compute and
+submits on a player's behalf after verifying their session. Boards may
+separately enable untrusted client submission for casual use.
 
 ```
 game client ──POST /submit (its own session token)──▶ score-submitter
@@ -16,9 +15,9 @@ score-submitter ──your validation──▶              (is the score sane?)
 score-submitter ──SubmitScore──▶ ggscale          (authoritative write)
 ```
 
-The player can only ever write **their own** score — ggscale derives the player
-from the verified token — and only scores that pass your validation. Deploy one
-instance anywhere with outbound HTTPS (Cloud Run, Lambda, Fly, a small VPS).
+The service verifies the token, passes the resulting player ID to ggscale, and
+writes only scores that pass your validation. Deploy one instance anywhere
+with outbound HTTPS (Cloud Run, Lambda, Fly, a small VPS).
 
 ## Run it
 

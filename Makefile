@@ -1,9 +1,15 @@
-.PHONY: build test test-verbose test-integration lint vet vulncheck tidy quickstart
+.PHONY: build test test-verbose test-integration lint vet vulncheck tidy quickstart openapi-generate openapi-check
 
 # Default target: run the same checks CI runs.
 .DEFAULT_GOAL := check
 
-check: lint vet test
+check: openapi-check lint vet test
+
+openapi-generate:
+	go run ./internal/cmd/openapi-operations -spec openapi.yaml -output testdata/openapi-v0.9.4-operations.txt
+
+openapi-check:
+	go run ./internal/cmd/openapi-operations -spec openapi.yaml -output testdata/openapi-v0.9.4-operations.txt -check
 
 build:
 	go build -o /dev/null ./...

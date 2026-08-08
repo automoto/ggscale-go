@@ -3,10 +3,48 @@
 All notable changes to `ggscale-go` are documented here. The project is
 pre-1.0; minor versions may contain breaking changes until v1.0.0.
 
+## [0.5.0]
+
+Synchronizes the SDK with ggscale server **v0.9.4** and expands the default
+HTTP runtime with bounded responses, RFC 9457 errors, request IDs, safe
+retries, conditional remote-config requests, and redacted structured logging.
+
+### Breaking
+
+- `Server.SubmitScore` now matches the v0.9.4 server-tier contract: it accepts
+  a player ID and posts to `/v1/server/leaderboards/{id}/scores`. Backends that
+  start with a player token should call `Server.VerifySession` first.
+- `ReconnectPolicy.Disabled` has been replaced by `ReconnectPolicy.Enabled`,
+  and reconnect is now off by default. Remove `Disabled: true` to keep
+  reconnect disabled; callers that previously relied on the default or set
+  `Disabled: false` must now set `Enabled: true`.
+
+### Added
+
+- Remote config with `ETag` / `If-None-Match`, Steam authentication and account
+  linking, account lifecycle methods, player and friend-code lookup, public
+  game-session browsing, expanded leaderboard reads/submissions, and
+  server-tier player storage.
+- Configurable HTTP client, overall call timeout, response-size cap, full-
+  jitter safe retries, structured logging, and typed non-HTTP failure classes.
+- Bounded WebSocket handshakes and message sizes, opt-in abnormal-close
+  recovery, stable request IDs, and an asynchronous post-reconnect
+  authoritative-resync hook.
+- Mutating HTTP retries now require explicit replay-safety opt-in; caller
+  deadlines are preserved by default, oversized `Retry-After` delays return
+  immediately, and the compatibility-oriented default body cap is 64 MiB.
+- Anonymous logout/disable clears persisted sessions, and terminal realtime
+  reads return `ErrConnectionClosed` directly.
+- `P2PMatch.RelayError` preserves best-effort relay credential failures so
+  relay-dependent games can distinguish a direct-only result from success.
+- A pinned OpenAPI 3.1 snapshot plus generated 70-operation coverage manifest
+  and drift check (`make openapi-check`).
+- Integration tests now target `buildwrangler/ggscale:v0.9.4` by default.
+
 ## [0.4.0] — unreleased
 
 Synchronizes the SDK with ggscale server **v0.9.0** and prepares for the
-peer-to-peer GA. See `docs/ga-readiness.md` for the full checklist.
+peer-to-peer GA.
 
 ### Breaking
 
@@ -44,8 +82,7 @@ peer-to-peer GA. See `docs/ga-readiness.md` for the full checklist.
   c.Server.SubmitScore(ctx, playerToken, leaderboardID, score)
   ```
 
-  `Leaderboards.Top` and `Leaderboards.AroundMe` (reads) are unchanged. See
-  `docs/leaderboards-p2p.md` for the verify-then-submit pattern in P2P games.
+  `Leaderboards.Top` and `Leaderboards.AroundMe` (reads) are unchanged.
 
 ### Added
 

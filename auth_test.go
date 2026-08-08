@@ -195,3 +195,34 @@ func TestAuthService_Logout_204(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "refresh", body.RefreshToken)
 }
+
+func TestAuthService_Logout_clears_matching_installed_session(t *testing.T) {
+	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
+	var callbackSession *Session
+	callbackCalls := 0
+	c, err := NewClient(Options{
+		APIKey: "k", Transport: ft,
+		OnSessionUpdate: func(session *Session) {
+			callbackSession = session
+			callbackCalls++
+		},
+	})
+	require.NoError(t, err)
+	c.SetSession(&Session{AccessToken: "access", RefreshToken: "refresh", ExpiresAt: time.Now().Add(time.Hour)})
+
+	require.NoError(t, c.Auth.Logout(context.Background(), "refresh"))
+	assert.Nil(t, c.Session())
+	assert.Nil(t, callbackSession)
+	assert.Equal(t, 2, callbackCalls, "SetSession and Logout each notify persistence")
+}
+
+func TestAuthService_Logout_different_token_keeps_installed_session(t *testing.T) {
+	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
+	c, err := NewClient(Options{APIKey: "k", Transport: ft})
+	require.NoError(t, err)
+	c.SetSession(&Session{AccessToken: "access", RefreshToken: "current", ExpiresAt: time.Now().Add(time.Hour)})
+
+	require.NoError(t, c.Auth.Logout(context.Background(), "another-device"))
+	require.NotNil(t, c.Session())
+	assert.Equal(t, "current", c.Session().RefreshToken)
+}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,6 +17,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Compile-time guard for the opt-in reconnect API.
+var _ = ReconnectPolicy{Enabled: true}
+
+func TestReconnectPolicyPublicShape(t *testing.T) {
+	policyType := reflect.TypeFor[ReconnectPolicy]()
+	_, hasEnabled := policyType.FieldByName("Enabled")
+	_, hasDisabled := policyType.FieldByName("Disabled")
+
+	assert.True(t, hasEnabled)
+	assert.False(t, hasDisabled, "the removed opt-out field must not be restored")
+}
 
 func TestRealtimeClient_ReadMessage(t *testing.T) {
 	msg := Message{Type: "matchmaker_matched", Payload: mustMarshal(map[string]any{
@@ -153,13 +166,149 @@ func TestRealtimeClient_ReadMessage_connection_closed(t *testing.T) {
 
 	_, err = rc.ReadMessage(ctx)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrConnectionClosed))
+	assert.Equal(t, ErrConnectionClosed, err, "closed connections return the sentinel directly")
+	_, err = rc.ReadMessage(ctx)
+	assert.Equal(t, ErrConnectionClosed, err, "repeated reads cannot spin on wrapped terminal errors")
 }
 
 func TestRealtimeClient_Close_idempotent(t *testing.T) {
 	rc := &RealtimeClient{}
 	require.NoError(t, rc.Close())
 	require.NoError(t, rc.Close())
+}
+
+func TestRealtimeClient_reconnects_after_retryable_close(t *testing.T) {
+	var connections atomic.Int32
+	var reconnects atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		require.NoError(t, err)
+		if connections.Add(1) == 1 {
+			require.NoError(t, conn.Close(websocket.StatusInternalError, "restart"))
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		data, err := json.Marshal(Message{Type: "presence", Payload: json.RawMessage(`{"status":"online"}`)})
+		require.NoError(t, err)
+		require.NoError(t, conn.Write(ctx, websocket.MessageText, data))
+		_ = conn.Close(websocket.StatusNormalClosure, "")
+	}))
+	defer server.Close()
+
+	c, err := NewClient(Options{
+		APIKey:  "k",
+		BaseURL: server.URL,
+		ReconnectPolicy: ReconnectPolicy{
+			Enabled:     true,
+			MaxAttempts: 2,
+			Jitter:      func(time.Duration) time.Duration { return 0 },
+		},
+		OnRealtimeReconnect: func(context.Context, *Client) {
+			reconnects.Add(1)
+		},
+	})
+	require.NoError(t, err)
+	c.SetSession(&Session{AccessToken: "tok", ExpiresAt: time.Now().Add(time.Hour)})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	rc, err := c.DialRealtime(ctx)
+	require.NoError(t, err)
+	defer rc.Close()
+
+	message, err := rc.ReadMessage(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "presence", message.Type)
+	assert.Equal(t, int32(2), connections.Load())
+	require.Eventually(t, func() bool { return reconnects.Load() == 1 }, time.Second, time.Millisecond)
+}
+
+func TestRealtimeClient_does_not_reconnect_by_default(t *testing.T) {
+	var connections atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		connections.Add(1)
+		conn, err := websocket.Accept(w, r, nil)
+		require.NoError(t, err)
+		require.NoError(t, conn.Close(websocket.StatusInternalError, "restart"))
+	}))
+	defer server.Close()
+
+	c, err := NewClient(Options{APIKey: "k", BaseURL: server.URL})
+	require.NoError(t, err)
+	c.SetSession(&Session{AccessToken: "tok", ExpiresAt: time.Now().Add(time.Hour)})
+	rc, err := c.DialRealtime(context.Background())
+	require.NoError(t, err)
+	defer rc.Close()
+
+	_, err = rc.ReadMessage(context.Background())
+	assert.Equal(t, ErrConnectionClosed, err)
+	assert.Equal(t, int32(1), connections.Load())
+}
+
+func TestRealtimeClient_reconnect_hook_cannot_block_read_loop(t *testing.T) {
+	var connections atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		require.NoError(t, err)
+		if connections.Add(1) == 1 {
+			require.NoError(t, conn.Close(websocket.StatusInternalError, "restart"))
+			return
+		}
+		data, err := json.Marshal(Message{Type: "presence"})
+		require.NoError(t, err)
+		require.NoError(t, conn.Write(context.Background(), websocket.MessageText, data))
+		_ = conn.Close(websocket.StatusNormalClosure, "")
+	}))
+	defer server.Close()
+
+	hookStarted := make(chan struct{})
+	releaseHook := make(chan struct{})
+	hookDone := make(chan struct{})
+	c, err := NewClient(Options{
+		APIKey: "k", BaseURL: server.URL,
+		ReconnectPolicy: ReconnectPolicy{
+			Enabled: true, MaxAttempts: 1,
+			Jitter: func(time.Duration) time.Duration { return 0 },
+		},
+		OnRealtimeReconnect: func(context.Context, *Client) {
+			close(hookStarted)
+			<-releaseHook
+			close(hookDone)
+		},
+	})
+	require.NoError(t, err)
+	c.SetSession(&Session{AccessToken: "tok", ExpiresAt: time.Now().Add(time.Hour)})
+	rc, err := c.DialRealtime(context.Background())
+	require.NoError(t, err)
+	defer rc.Close()
+
+	readResult := make(chan error, 1)
+	go func() {
+		message, readErr := rc.ReadMessage(context.Background())
+		if readErr == nil && message.Type != "presence" {
+			readErr = errors.New("unexpected realtime message")
+		}
+		readResult <- readErr
+	}()
+	select {
+	case <-hookStarted:
+	case <-time.After(time.Second):
+		t.Fatal("reconnect hook did not start")
+	}
+	select {
+	case readErr := <-readResult:
+		require.NoError(t, readErr)
+	case <-time.After(time.Second):
+		close(releaseHook)
+		t.Fatal("blocking reconnect hook stopped the read loop")
+	}
+	close(releaseHook)
+	select {
+	case <-hookDone:
+	case <-time.After(time.Second):
+		t.Fatal("reconnect hook did not finish")
+	}
 }
 
 func TestRealtimeClient_ws_url_from_http(t *testing.T) {

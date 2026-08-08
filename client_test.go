@@ -14,6 +14,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type deadlineCaptureTransport struct {
+	deadline time.Time
+	ok       bool
+}
+
+func (d *deadlineCaptureTransport) Call(ctx context.Context, _ *Request, _ any) error {
+	d.deadline, d.ok = ctx.Deadline()
+	return nil
+}
+
 func TestNewClient_requires_api_key(t *testing.T) {
 	_, err := NewClient(Options{BaseURL: "http://localhost"})
 	require.Error(t, err)
@@ -22,6 +32,20 @@ func TestNewClient_requires_api_key(t *testing.T) {
 func TestNewClient_requires_baseurl_or_transport(t *testing.T) {
 	_, err := NewClient(Options{APIKey: "k"})
 	require.Error(t, err)
+}
+
+func TestNewClient_rejects_unsafe_base_urls(t *testing.T) {
+	for _, baseURL := range []string{
+		"ggscale.example.com",
+		"ftp://ggscale.example.com",
+		"https://user:password@ggscale.example.com",
+		"https://ggscale.example.com?token=secret",
+	} {
+		t.Run(baseURL, func(t *testing.T) {
+			_, err := NewClient(Options{APIKey: "k", BaseURL: baseURL})
+			require.Error(t, err)
+		})
+	}
 }
 
 func TestNewClient_default_transport_is_stdnet(t *testing.T) {
@@ -64,6 +88,21 @@ func TestClient_callProtected_attaches_auth_and_session_headers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ggs_xyz", ft.gotReq.APIKey)
 	assert.Equal(t, "live-jwt", ft.gotReq.SessionToken)
+}
+
+func TestClient_callProtected_preserves_longer_caller_deadline_by_default(t *testing.T) {
+	transport := &deadlineCaptureTransport{}
+	c, err := NewClient(Options{APIKey: "k", Transport: transport})
+	require.NoError(t, err)
+	c.SetSession(&Session{AccessToken: "live", ExpiresAt: time.Now().Add(time.Hour)})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	want, ok := ctx.Deadline()
+	require.True(t, ok)
+
+	require.NoError(t, c.callProtected(ctx, &Request{Method: http.MethodGet, Path: "/v1/test"}, nil))
+	require.True(t, transport.ok)
+	assert.Equal(t, want, transport.deadline)
 }
 
 func TestClient_callProtected_errors_when_no_session(t *testing.T) {
@@ -340,6 +379,37 @@ func TestClient_OnSessionUpdate_fires_with_nil_on_clear(t *testing.T) {
 	require.Len(t, saw, 2)
 	assert.NotNil(t, saw[0])
 	assert.Nil(t, saw[1])
+}
+
+func TestClient_OnSessionUpdate_cannot_mutate_internal_session(t *testing.T) {
+	c, err := NewClient(Options{
+		APIKey:  "k",
+		BaseURL: "http://localhost",
+		OnSessionUpdate: func(session *Session) {
+			if session != nil {
+				session.AccessToken = "callback-mutated"
+			}
+		},
+	})
+	require.NoError(t, err)
+	c.SetSession(&Session{AccessToken: "original"})
+	assert.Equal(t, "original", c.Session().AccessToken)
+}
+
+func TestClient_stale_unauthorized_does_not_rotate_new_session(t *testing.T) {
+	dt := newDispatchTransport()
+	dt.on("/v1/auth/refresh", func(*Request) (int, any) {
+		t.Fatal("already-rotated session must not refresh again")
+		return 500, nil
+	})
+	c, err := NewClient(Options{APIKey: "k", Transport: dt})
+	require.NoError(t, err)
+	c.SetSession(&Session{
+		AccessToken: "new-access", RefreshToken: "new-refresh",
+		ExpiresAt: time.Now().Add(time.Hour),
+	})
+	require.NoError(t, c.refreshAfterUnauthorized(context.Background(), "old-access"))
+	assert.Equal(t, int64(0), dt.callsTo("/v1/auth/refresh"))
 }
 
 func TestClient_SetSession_round_trip(t *testing.T) {

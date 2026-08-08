@@ -47,8 +47,9 @@ func (r *RelayService) GetCredentials(ctx context.Context, opts ...RelayOption) 
 		fn(&o)
 	}
 	req := &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/relay/credentials",
+		OperationID: "issueRelayCredentials",
+		Method:      http.MethodPost,
+		Path:        "/v1/relay/credentials",
 	}
 	if o.matchID != "" {
 		req.Query = url.Values{"match_id": {o.matchID}}

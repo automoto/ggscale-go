@@ -31,6 +31,7 @@ type Session struct {
 // authentication strategies — signup, email verification, refresh,
 // and logout. Reach it via Client.Auth.
 type AuthService struct {
+	c         *Client
 	transport Transport
 	apiKey    string
 }
@@ -54,6 +55,26 @@ type loginRequest struct {
 
 type customTokenRequest struct {
 	Token string `json:"token"`
+}
+
+type steamAuthRequest struct {
+	Ticket string `json:"ticket"`
+}
+
+type linkEmailRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type changePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+type resetPasswordConfirmRequest struct {
+	Email       string `json:"email"`
+	Code        string `json:"code"`
+	NewPassword string `json:"new_password"`
 }
 
 type verifyRequest struct {
@@ -86,10 +107,11 @@ func (r *sessionResponse) toSession() *Session {
 // before the player can log in.
 func (a *AuthService) Signup(ctx context.Context, email, password string) error {
 	return a.transport.Call(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/auth/signup",
-		APIKey: a.apiKey,
-		Body:   signupRequest{Email: email, Password: password},
+		OperationID: "authSignup",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/signup",
+		APIKey:      a.apiKey,
+		Body:        signupRequest{Email: email, Password: password},
 	}, nil)
 }
 
@@ -98,10 +120,11 @@ func (a *AuthService) Signup(ctx context.Context, email, password string) error 
 func (a *AuthService) Verify(ctx context.Context, email, code string) (*VerifyResult, error) {
 	var res VerifyResult
 	err := a.transport.Call(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/auth/verify",
-		APIKey: a.apiKey,
-		Body:   verifyRequest{Email: email, Code: code},
+		OperationID: "authVerify",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/verify",
+		APIKey:      a.apiKey,
+		Body:        verifyRequest{Email: email, Code: code},
 	}, &res)
 	if err != nil {
 		return nil, err
@@ -114,10 +137,11 @@ func (a *AuthService) Verify(ctx context.Context, email, code string) (*VerifyRe
 func (a *AuthService) Refresh(ctx context.Context, refreshToken string) (*Session, error) {
 	var resp sessionResponse
 	err := a.transport.Call(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/auth/refresh",
-		APIKey: a.apiKey,
-		Body:   refreshRequest{RefreshToken: refreshToken},
+		OperationID: "authRefresh",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/refresh",
+		APIKey:      a.apiKey,
+		Body:        refreshRequest{RefreshToken: refreshToken},
 	}, &resp)
 	if err != nil {
 		return nil, err
@@ -127,12 +151,120 @@ func (a *AuthService) Refresh(ctx context.Context, refreshToken string) (*Sessio
 
 // Logout revokes the given refresh token.
 func (a *AuthService) Logout(ctx context.Context, refreshToken string) error {
-	return a.transport.Call(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/auth/logout",
-		APIKey: a.apiKey,
-		Body:   refreshRequest{RefreshToken: refreshToken},
+	err := a.transport.Call(ctx, &Request{
+		OperationID: "authLogout",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/logout",
+		APIKey:      a.apiKey,
+		Body:        refreshRequest{RefreshToken: refreshToken},
 	}, nil)
+	if err != nil {
+		return err
+	}
+	// Logging out another device's token must not disturb the current player.
+	// When the revoked token is the installed session, clear it and notify the
+	// persistence callback so no revoked credential survives a restart.
+	if a.c != nil {
+		current := a.c.Session()
+		if current != nil && current.RefreshToken == refreshToken {
+			a.c.SetSession(nil)
+		}
+	}
+	return nil
+}
+
+// ResendVerification sends a fresh verification code for an email signup or
+// linked email identity.
+func (a *AuthService) ResendVerification(ctx context.Context, email string) error {
+	return a.transport.Call(ctx, &Request{
+		OperationID: "resendVerification",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/verify/resend",
+		APIKey:      a.apiKey,
+		Body: struct {
+			Email string `json:"email"`
+		}{Email: email},
+	}, nil)
+}
+
+// RequestPasswordReset emails a reset code. The endpoint deliberately does
+// not reveal whether the address exists.
+func (a *AuthService) RequestPasswordReset(ctx context.Context, email string) error {
+	return a.transport.Call(ctx, &Request{
+		OperationID: "requestPasswordReset",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/password-reset",
+		APIKey:      a.apiKey,
+		Body: struct {
+			Email string `json:"email"`
+		}{Email: email},
+	}, nil)
+}
+
+// ConfirmPasswordReset consumes a reset code and installs a new password.
+func (a *AuthService) ConfirmPasswordReset(ctx context.Context, email, code, newPassword string) error {
+	return a.transport.Call(ctx, &Request{
+		OperationID: "confirmPasswordReset",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/password-reset/confirm",
+		APIKey:      a.apiKey,
+		Body: resetPasswordConfirmRequest{
+			Email: email, Code: code, NewPassword: newPassword,
+		},
+	}, nil)
+}
+
+// LinkEmail upgrades the current player to email/password sign-in without
+// changing its player ID or data.
+func (a *AuthService) LinkEmail(ctx context.Context, email, password string) error {
+	return a.c.callProtected(ctx, &Request{
+		OperationID: "linkEmail",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/link",
+		Body:        linkEmailRequest{Email: email, Password: password},
+	}, nil)
+}
+
+// LinkSteam attaches a verified Steam session-ticket identity to the current
+// player without changing its player ID or data.
+func (a *AuthService) LinkSteam(ctx context.Context, ticket string) error {
+	return a.c.callProtected(ctx, &Request{
+		OperationID: "linkSteam",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/link/steam",
+		Body:        steamAuthRequest{Ticket: ticket},
+	}, nil)
+}
+
+// ChangePassword changes the current player's password and revokes all
+// refresh tokens. The current access token remains valid until it expires.
+func (a *AuthService) ChangePassword(ctx context.Context, currentPassword, newPassword string) error {
+	return a.c.callProtected(ctx, &Request{
+		OperationID: "changePassword",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/password",
+		Body: changePasswordRequest{
+			CurrentPassword: currentPassword, NewPassword: newPassword,
+		},
+	}, nil)
+}
+
+// Disable deactivates the current player and clears the local session after
+// the server revokes it. Password may be empty for anonymous players.
+func (a *AuthService) Disable(ctx context.Context, password string) error {
+	err := a.c.callProtected(ctx, &Request{
+		OperationID: "disablePlayer",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/disable",
+		Body: struct {
+			Password string `json:"password,omitempty"`
+		}{Password: password},
+	}, nil)
+	if err != nil {
+		return err
+	}
+	a.c.SetSession(nil)
+	return nil
 }
 
 // EmailPasswordAuth authenticates via POST /v1/auth/login.
@@ -153,10 +285,11 @@ func NewEmailPasswordAuth(t Transport, apiKey, email, password string) *EmailPas
 func (a *EmailPasswordAuth) Authenticate(ctx context.Context) (*Session, error) {
 	var resp sessionResponse
 	err := a.transport.Call(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/auth/login",
-		APIKey: a.apiKey,
-		Body:   loginRequest{Email: a.email, Password: a.password},
+		OperationID: "authLogin",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/login",
+		APIKey:      a.apiKey,
+		Body:        loginRequest{Email: a.email, Password: a.password},
 	}, &resp)
 	if err != nil {
 		return nil, err
@@ -183,10 +316,39 @@ func NewCustomTokenAuth(t Transport, apiKey, signedToken string) *CustomTokenAut
 func (a *CustomTokenAuth) Authenticate(ctx context.Context) (*Session, error) {
 	var resp sessionResponse
 	err := a.transport.Call(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/auth/custom-token",
-		APIKey: a.apiKey,
-		Body:   customTokenRequest{Token: a.token},
+		OperationID: "authCustomToken",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/custom-token",
+		APIKey:      a.apiKey,
+		Body:        customTokenRequest{Token: a.token},
+	}, &resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp.toSession(), nil
+}
+
+// SteamAuth authenticates with a Steamworks session ticket.
+type SteamAuth struct {
+	transport Transport
+	apiKey    string
+	ticket    string
+}
+
+// NewSteamAuth builds an authenticator for a Steamworks session ticket.
+func NewSteamAuth(t Transport, apiKey, ticket string) *SteamAuth {
+	return &SteamAuth{transport: t, apiKey: apiKey, ticket: ticket}
+}
+
+// Authenticate exchanges the Steamworks ticket for a ggscale player session.
+func (a *SteamAuth) Authenticate(ctx context.Context) (*Session, error) {
+	var resp sessionResponse
+	err := a.transport.Call(ctx, &Request{
+		OperationID: "authSteam",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/steam",
+		APIKey:      a.apiKey,
+		Body:        steamAuthRequest{Ticket: a.ticket},
 	}, &resp)
 	if err != nil {
 		return nil, err
@@ -239,6 +401,7 @@ func (a *OfflineAuth) Authenticate(_ context.Context) (*Session, error) {
 var (
 	_ Authenticator = (*EmailPasswordAuth)(nil)
 	_ Authenticator = (*CustomTokenAuth)(nil)
+	_ Authenticator = (*SteamAuth)(nil)
 	_ Authenticator = (*OfflineAuth)(nil)
 	_ Authenticator = (*AnonymousAuth)(nil)
 )

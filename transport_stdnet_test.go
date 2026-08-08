@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,6 +17,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
 
 func TestStdNetTransport_Call_sends_headers_body_and_decodes_response(t *testing.T) {
 	type echoReq struct {
@@ -225,7 +234,10 @@ func TestStdNetTransport_Call_error_mapping(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			tr := &ggscale.StdNetTransport{BaseURL: srv.URL}
+			tr := &ggscale.StdNetTransport{
+				BaseURL:     srv.URL,
+				RetryPolicy: ggscale.RetryPolicy{MaxAttempts: 1},
+			}
 			err := tr.Call(context.Background(), &ggscale.Request{
 				Method: http.MethodGet,
 				Path:   "/v1/anything",
@@ -264,15 +276,290 @@ func TestStdNetTransport_Call_context_cancellation(t *testing.T) {
 	assert.True(t, errors.Is(err, context.Canceled), "want context.Canceled, got %v", err)
 }
 
-func TestStdNetTransport_Call_default_http_client_has_timeout(t *testing.T) {
+func TestStdNetTransport_Call_default_http_client_handles_network_failure(t *testing.T) {
 	tr := &ggscale.StdNetTransport{BaseURL: "http://localhost:1"}
-	// The default client should be set lazily on first use; we can't read
-	// it from the outside, but we can verify a Call against a closed port
-	// fails with a network error (not a panic).
+	// A Call against a closed port fails with a typed network error rather
+	// than panicking while the default client is initialized lazily.
 	err := tr.Call(context.Background(), &ggscale.Request{
 		Method: http.MethodGet,
 		Path:   "/v1/anything",
 	}, nil)
 	require.Error(t, err)
 	assert.False(t, errors.Is(err, context.Canceled))
+}
+
+func TestStdNetTransport_retries_safe_request_with_stable_request_id(t *testing.T) {
+	var hits atomic.Int32
+	var requestID string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := hits.Add(1)
+		if requestID == "" {
+			requestID = r.Header.Get("X-Request-Id")
+		} else {
+			assert.Equal(t, requestID, r.Header.Get("X-Request-Id"))
+		}
+		if n < 3 {
+			http.Error(w, "try again", http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = io.WriteString(w, `{"ok":true}`)
+	}))
+	defer srv.Close()
+
+	var events []ggscale.LogEvent
+	tr := &ggscale.StdNetTransport{
+		BaseURL: srv.URL,
+		RetryPolicy: ggscale.RetryPolicy{
+			MaxAttempts: 3,
+			Jitter:      func(time.Duration) time.Duration { return 0 },
+		},
+		Logger: func(event ggscale.LogEvent) { events = append(events, event) },
+	}
+	var out struct {
+		OK bool `json:"ok"`
+	}
+	err := tr.Call(context.Background(), &ggscale.Request{
+		OperationID: "getRemoteConfig",
+		Method:      http.MethodGet,
+		Path:        "/retry",
+	}, &out)
+	require.NoError(t, err)
+	assert.True(t, out.OK)
+	assert.Equal(t, int32(3), hits.Load())
+	require.Len(t, events, 3)
+	assert.Equal(t, "http.retry", events[0].Event)
+	assert.Equal(t, "http.retry", events[1].Event)
+	assert.Equal(t, "http.complete", events[2].Event)
+	assert.Equal(t, 3, events[2].Attempts)
+}
+
+func TestStdNetTransport_does_not_retry_post_by_default(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		http.Error(w, "try again", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	tr := &ggscale.StdNetTransport{
+		BaseURL: srv.URL,
+		RetryPolicy: ggscale.RetryPolicy{
+			MaxAttempts: 3,
+			Jitter:      func(time.Duration) time.Duration { return 0 },
+		},
+	}
+	err := tr.Call(context.Background(), &ggscale.Request{
+		OperationID: "authRefresh",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/refresh",
+		Body:        map[string]string{"refresh_token": "secret"},
+	}, nil)
+	require.Error(t, err)
+	assert.Equal(t, int32(1), hits.Load())
+}
+
+func TestStdNetTransport_does_not_retry_mutating_methods_without_opt_in(t *testing.T) {
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			var hits atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				hits.Add(1)
+				http.Error(w, "try again", http.StatusServiceUnavailable)
+			}))
+			defer srv.Close()
+
+			tr := &ggscale.StdNetTransport{
+				BaseURL: srv.URL,
+				RetryPolicy: ggscale.RetryPolicy{
+					MaxAttempts: 3,
+					Jitter:      func(time.Duration) time.Duration { return 0 },
+				},
+			}
+			err := tr.Call(context.Background(), &ggscale.Request{
+				Method: method, Path: "/mutate", Body: map[string]int{"version": 1},
+			}, nil)
+			require.Error(t, err)
+			assert.Equal(t, int32(1), hits.Load())
+		})
+	}
+}
+
+func TestStdNetTransport_retries_mutating_method_only_with_explicit_opt_in(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if hits.Add(1) == 1 {
+			http.Error(w, "try again", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	tr := &ggscale.StdNetTransport{
+		BaseURL: srv.URL,
+		RetryPolicy: ggscale.RetryPolicy{
+			MaxAttempts: 2,
+			Jitter:      func(time.Duration) time.Duration { return 0 },
+		},
+	}
+	err := tr.Call(context.Background(), &ggscale.Request{
+		Method: http.MethodPut, Path: "/mutate", Body: map[string]int{"version": 1}, ReplaySafe: true,
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), hits.Load())
+}
+
+func TestStdNetTransport_does_not_replay_put_after_ambiguous_transport_error(t *testing.T) {
+	var attempts atomic.Int32
+	httpClient := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		attempts.Add(1)
+		return nil, &net.OpError{Op: "write", Net: "tcp", Err: errors.New("connection reset")}
+	})}
+	tr := &ggscale.StdNetTransport{
+		BaseURL: "http://ggscale.invalid", Client: httpClient,
+		RetryPolicy: ggscale.RetryPolicy{
+			MaxAttempts: 3,
+			Jitter:      func(time.Duration) time.Duration { return 0 },
+		},
+	}
+
+	err := tr.Call(context.Background(), &ggscale.Request{
+		Method: http.MethodPut, Path: "/v1/storage/objects/save",
+		Body: map[string]int{"version": 1},
+	}, nil)
+	require.Error(t, err)
+	assert.Equal(t, int32(1), attempts.Load(), "ambiguous PUT outcome must be returned to the caller")
+}
+
+func TestStdNetTransport_deadline_cancels_retry_backoff(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		http.Error(w, "try again", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	tr := &ggscale.StdNetTransport{
+		BaseURL: srv.URL,
+		RetryPolicy: ggscale.RetryPolicy{
+			MaxAttempts: 3,
+			Jitter:      func(cap time.Duration) time.Duration { return cap },
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	err := tr.Call(ctx, &ggscale.Request{Method: http.MethodGet, Path: "/retry"}, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	var requestErr *ggscale.RequestError
+	require.ErrorAs(t, err, &requestErr)
+	assert.Equal(t, ggscale.FailureTimeout, requestErr.Kind)
+	assert.Equal(t, int32(1), hits.Load())
+}
+
+func TestStdNetTransport_retry_after_beyond_deadline_returns_rate_limit_immediately(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Retry-After", "60")
+		http.Error(w, "slow down", http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	tr := &ggscale.StdNetTransport{BaseURL: srv.URL}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	started := time.Now()
+	err := tr.Call(ctx, &ggscale.Request{Method: http.MethodGet, Path: "/limited"}, nil)
+	elapsed := time.Since(started)
+
+	require.Error(t, err)
+	var apiErr *ggscale.Error
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, http.StatusTooManyRequests, apiErr.Status)
+	assert.Equal(t, time.Minute, apiErr.RetryAfter)
+	assert.Less(t, elapsed, 500*time.Millisecond)
+	assert.Equal(t, int32(1), hits.Load())
+}
+
+func TestStdNetTransport_bounds_response_body(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, strings.Repeat("x", 32))
+	}))
+	defer srv.Close()
+
+	tr := &ggscale.StdNetTransport{BaseURL: srv.URL, MaxResponseBodyBytes: 8}
+	err := tr.Call(context.Background(), &ggscale.Request{Method: http.MethodGet, Path: "/large"}, nil)
+	require.Error(t, err)
+	var requestErr *ggscale.RequestError
+	require.ErrorAs(t, err, &requestErr)
+	assert.Equal(t, ggscale.FailureProtocol, requestErr.Kind)
+}
+
+func TestStdNetTransport_strips_credentials_on_cross_origin_redirect(t *testing.T) {
+	var authorization, session string
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorization = r.Header.Get("Authorization")
+		session = r.Header.Get("X-Session-Token")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer target.Close()
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/target", http.StatusFound)
+	}))
+	defer source.Close()
+
+	tr := &ggscale.StdNetTransport{BaseURL: source.URL}
+	err := tr.Call(context.Background(), &ggscale.Request{
+		Method:       http.MethodGet,
+		Path:         "/redirect",
+		APIKey:       "api-secret",
+		SessionToken: "player-secret",
+	}, nil)
+	require.NoError(t, err)
+	assert.Empty(t, authorization)
+	assert.Empty(t, session)
+}
+
+func TestStdNetTransport_redirect_loop_returns_typed_protocol_error(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/loop", http.StatusFound)
+	}))
+	defer srv.Close()
+
+	tr := &ggscale.StdNetTransport{BaseURL: srv.URL}
+	err := tr.Call(context.Background(), &ggscale.Request{Method: http.MethodGet, Path: "/loop"}, nil)
+	require.Error(t, err)
+	var requestErr *ggscale.RequestError
+	require.ErrorAs(t, err, &requestErr)
+	assert.Equal(t, ggscale.FailureProtocol, requestErr.Kind)
+	assert.Contains(t, requestErr.Error(), "stopped after 10 redirects")
+}
+
+func TestStdNetTransport_problem_details_and_retry_after_date(t *testing.T) {
+	retryAt := time.Now().Add(2 * time.Second).UTC().Format(http.TimeFormat)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.Header().Set("X-Request-Id", "server-request-id")
+		w.Header().Set("Retry-After", retryAt)
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, `{"type":"https://ggscale.dev/problems/rate-limit","title":"Rate limited","status":429,"detail":"slow down","instance":"urn:request:123"}`)
+	}))
+	defer srv.Close()
+
+	tr := &ggscale.StdNetTransport{
+		BaseURL:     srv.URL,
+		RetryPolicy: ggscale.RetryPolicy{MaxAttempts: 1},
+	}
+	err := tr.Call(context.Background(), &ggscale.Request{Method: http.MethodGet, Path: "/limited"}, nil)
+	require.Error(t, err)
+	var apiErr *ggscale.Error
+	require.ErrorAs(t, err, &apiErr)
+	assert.Equal(t, "https://ggscale.dev/problems/rate-limit", apiErr.Type)
+	assert.Equal(t, "Rate limited", apiErr.Title)
+	assert.Equal(t, "slow down", apiErr.Detail)
+	assert.Equal(t, "urn:request:123", apiErr.Instance)
+	assert.Equal(t, "server-request-id", apiErr.RequestID)
+	assert.Positive(t, apiErr.RetryAfter)
 }

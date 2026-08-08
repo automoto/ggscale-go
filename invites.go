@@ -48,9 +48,10 @@ type inviteListResponse struct {
 func (i *InvitesService) Create(ctx context.Context, sessionID, toEmail string) (int64, error) {
 	var res inviteCreateResponse
 	err := i.c.callProtected(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/invite",
-		Body:   inviteCreateBody{ToEmail: toEmail, SessionID: sessionID},
+		OperationID: "createGameInvite",
+		Method:      http.MethodPost,
+		Path:        "/v1/invite",
+		Body:        inviteCreateBody{ToEmail: toEmail, SessionID: sessionID},
 	}, &res)
 	if err != nil {
 		return 0, err
@@ -62,8 +63,9 @@ func (i *InvitesService) Create(ctx context.Context, sessionID, toEmail string) 
 func (i *InvitesService) List(ctx context.Context) ([]Invite, error) {
 	var res inviteListResponse
 	err := i.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   "/v1/invite",
+		OperationID: "listGameInvites",
+		Method:      http.MethodGet,
+		Path:        "/v1/invite",
 	}, &res)
 	if err != nil {
 		return nil, err
@@ -75,7 +77,8 @@ func (i *InvitesService) List(ctx context.Context) ([]Invite, error) {
 // declines/dismisses it.
 func (i *InvitesService) Delete(ctx context.Context, inviteID int64) error {
 	return i.c.callProtected(ctx, &Request{
-		Method: http.MethodDelete,
-		Path:   "/v1/invite/" + strconv.FormatInt(inviteID, 10),
+		OperationID: "deleteGameInvite",
+		Method:      http.MethodDelete,
+		Path:        "/v1/invite/" + strconv.FormatInt(inviteID, 10),
 	}, nil)
 }

@@ -22,6 +22,8 @@ type Profile struct {
 	ExternalID      string     `json:"external_id"`
 	Email           string     `json:"email,omitempty"`
 	XUID            string     `json:"xuid,omitempty"`
+	DisplayName     string     `json:"display_name,omitempty"`
+	FriendCode      string     `json:"friend_code,omitempty"`
 	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 }
@@ -30,16 +32,18 @@ type Profile struct {
 // pointers so the SDK can distinguish "leave alone" from "set to
 // empty"; the server rejects empty patches with 400.
 type ProfilePatch struct {
-	Email *string `json:"email,omitempty"`
-	XUID  *string `json:"xuid,omitempty"`
+	Email       *string `json:"email,omitempty"`
+	XUID        *string `json:"xuid,omitempty"`
+	DisplayName *string `json:"display_name,omitempty"`
 }
 
 // Get returns the calling end-user's profile.
 func (p *ProfileService) Get(ctx context.Context) (*Profile, error) {
 	var prof Profile
 	err := p.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   "/v1/profile",
+		OperationID: "getProfile",
+		Method:      http.MethodGet,
+		Path:        "/v1/profile",
 	}, &prof)
 	if err != nil {
 		return nil, err
@@ -53,8 +57,26 @@ func (p *ProfileService) Get(ctx context.Context) (*Profile, error) {
 // method returns nil on success.
 func (p *ProfileService) Update(ctx context.Context, patch ProfilePatch) error {
 	return p.c.callProtected(ctx, &Request{
-		Method: http.MethodPatch,
-		Path:   "/v1/profile",
-		Body:   patch,
+		OperationID: "patchProfile",
+		Method:      http.MethodPatch,
+		Path:        "/v1/profile",
+		Body:        patch,
 	}, nil)
+}
+
+// RegenerateFriendCode invalidates the previous friend code and returns a new
+// one for the current player.
+func (p *ProfileService) RegenerateFriendCode(ctx context.Context) (string, error) {
+	var result struct {
+		FriendCode string `json:"friend_code"`
+	}
+	err := p.c.callProtected(ctx, &Request{
+		OperationID: "regenerateFriendCode",
+		Method:      http.MethodPost,
+		Path:        "/v1/profile/friend-code",
+	}, &result)
+	if err != nil {
+		return "", err
+	}
+	return result.FriendCode, nil
 }

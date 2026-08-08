@@ -3,8 +3,11 @@ package ggscale
 import (
 	"context"
 	"encoding/json"
+	"iter"
 	"net/http"
 	"net/url"
+	"strconv"
+	"time"
 )
 
 // GameSessionsService exposes the /v1/game-session endpoints for
@@ -24,9 +27,10 @@ type GameSessionAddr struct {
 
 // GameSessionPeer is one member of a session's roster.
 type GameSessionPeer struct {
-	PlayerID int64           `json:"player_id"`
-	XUID     string          `json:"xuid,omitempty"`
-	Addr     GameSessionAddr `json:"addr"`
+	PlayerID    int64           `json:"player_id"`
+	XUID        string          `json:"xuid,omitempty"`
+	DisplayName string          `json:"display_name,omitempty"`
+	Addr        GameSessionAddr `json:"addr"`
 }
 
 // GameSession is the state of a session as returned by Create, Get,
@@ -36,7 +40,33 @@ type GameSession struct {
 	SessionID string            `json:"session_id"`
 	JoinCode  string            `json:"join_code"`
 	State     string            `json:"state"`
+	ExpiresAt time.Time         `json:"expires_at"`
 	Peers     []GameSessionPeer `json:"peers"`
+}
+
+// PublicGameSession is one row in the public server browser.
+type PublicGameSession struct {
+	SessionID       string          `json:"session_id"`
+	TitleID         string          `json:"title_id,omitempty"`
+	Props           json.RawMessage `json:"props"`
+	PlayerCount     int             `json:"player_count"`
+	MaxPlayers      int             `json:"max_players"`
+	HostPlayerID    int64           `json:"host_player_id"`
+	HostDisplayName string          `json:"host_display_name,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+}
+
+// GameSessionListOptions filters and paginates the public server browser.
+type GameSessionListOptions struct {
+	TitleID string
+	Limit   int
+	Cursor  string
+}
+
+// GameSessionPage is one cursor page of public game sessions.
+type GameSessionPage struct {
+	Items      []PublicGameSession `json:"items"`
+	NextCursor string              `json:"next_cursor"`
 }
 
 // GameSessionCreate is the input to GameSessions.Create. PublicAddr is
@@ -70,9 +100,10 @@ type gameSessionHeartbeatResponse struct {
 func (g *GameSessionsService) Create(ctx context.Context, req GameSessionCreate) (*GameSession, error) {
 	var sess GameSession
 	err := g.c.callProtected(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/game-session",
-		Body:   req,
+		OperationID: "createGameSession",
+		Method:      http.MethodPost,
+		Path:        "/v1/game-session",
+		Body:        req,
 	}, &sess)
 	if err != nil {
 		return nil, err
@@ -86,8 +117,9 @@ func (g *GameSessionsService) Create(ctx context.Context, req GameSessionCreate)
 func (g *GameSessionsService) Get(ctx context.Context, sessionID string) (*GameSession, error) {
 	var sess GameSession
 	err := g.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   "/v1/game-session/" + url.PathEscape(sessionID),
+		OperationID: "getGameSession",
+		Method:      http.MethodGet,
+		Path:        "/v1/game-session/" + url.PathEscape(sessionID),
 	}, &sess)
 	if err != nil {
 		return nil, err
@@ -104,9 +136,10 @@ func (g *GameSessionsService) Resolve(ctx context.Context, joinCode string) (str
 		SessionID string `json:"session_id"`
 	}
 	err := g.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   "/v1/game-session",
-		Query:  q,
+		OperationID: "resolveGameSession",
+		Method:      http.MethodGet,
+		Path:        "/v1/game-session",
+		Query:       q,
 	}, &res)
 	if err != nil {
 		return "", err
@@ -121,9 +154,10 @@ func (g *GameSessionsService) Resolve(ctx context.Context, joinCode string) (str
 func (g *GameSessionsService) Join(ctx context.Context, sessionID string, addr GameSessionAddr) (*GameSession, error) {
 	var sess GameSession
 	err := g.c.callProtected(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/game-session/" + url.PathEscape(sessionID) + "/join",
-		Body:   gameSessionJoinBody{PublicAddr: addr},
+		OperationID: "joinGameSession",
+		Method:      http.MethodPost,
+		Path:        "/v1/game-session/" + url.PathEscape(sessionID) + "/join",
+		Body:        gameSessionJoinBody{PublicAddr: addr},
 	}, &sess)
 	if err != nil {
 		return nil, err
@@ -142,9 +176,10 @@ func (g *GameSessionsService) Heartbeat(ctx context.Context, sessionID string, q
 	}
 	var res gameSessionHeartbeatResponse
 	err := g.c.callProtected(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   "/v1/game-session/" + url.PathEscape(sessionID) + "/heartbeat",
-		Body:   body,
+		OperationID: "heartbeatGameSession",
+		Method:      http.MethodPost,
+		Path:        "/v1/game-session/" + url.PathEscape(sessionID) + "/heartbeat",
+		Body:        body,
 	}, &res)
 	if err != nil {
 		return nil, err
@@ -156,7 +191,45 @@ func (g *GameSessionsService) Heartbeat(ctx context.Context, sessionID string, q
 // leaves, the session ends for everyone.
 func (g *GameSessionsService) Leave(ctx context.Context, sessionID string) error {
 	return g.c.callProtected(ctx, &Request{
-		Method: http.MethodDelete,
-		Path:   "/v1/game-session/" + url.PathEscape(sessionID),
+		OperationID: "leaveGameSession",
+		Method:      http.MethodDelete,
+		Path:        "/v1/game-session/" + url.PathEscape(sessionID),
 	}, nil)
+}
+
+// List returns open, public, non-full sessions for the server browser.
+func (g *GameSessionsService) List(ctx context.Context, opts GameSessionListOptions) (*GameSessionPage, error) {
+	query := url.Values{}
+	if opts.TitleID != "" {
+		query.Set("title_id", opts.TitleID)
+	}
+	if opts.Limit > 0 {
+		query.Set("limit", strconv.Itoa(opts.Limit))
+	}
+	if opts.Cursor != "" {
+		query.Set("cursor", opts.Cursor)
+	}
+	var page GameSessionPage
+	err := g.c.callProtected(ctx, &Request{
+		OperationID: "listGameSessions",
+		Method:      http.MethodGet,
+		Path:        "/v1/game-sessions",
+		Query:       query,
+	}, &page)
+	if err != nil {
+		return nil, err
+	}
+	return &page, nil
+}
+
+// All iterates public game sessions across every cursor page.
+func (g *GameSessionsService) All(ctx context.Context, opts GameSessionListOptions) iter.Seq2[PublicGameSession, error] {
+	return cursorSequence(opts.Cursor, func(cursor string) ([]PublicGameSession, string, error) {
+		opts.Cursor = cursor
+		page, err := g.List(ctx, opts)
+		if err != nil {
+			return nil, "", err
+		}
+		return page.Items, page.NextCursor, nil
+	})
 }

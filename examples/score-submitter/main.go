@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	ggscale "github.com/automoto/ggscale-go"
 )
@@ -57,7 +58,7 @@ func main() {
 	}
 
 	// One Client, built with the secret key and no player session. Server-tier
-	// calls take the player's token per request, so this is safe to share
+	// calls take the verified player ID per request, so this is safe to share
 	// across all concurrent players.
 	gg, err := ggscale.NewClient(ggscale.Options{BaseURL: baseURL, APIKey: secretKey})
 	if err != nil {
@@ -65,10 +66,19 @@ func main() {
 	}
 
 	s := &server{gg: gg}
-	http.HandleFunc("POST /submit", s.handleSubmit)
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /submit", s.handleSubmit)
 
-	log.Printf("score-submitter listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	log.Print("score-submitter listening")
+	httpServer := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	log.Fatal(httpServer.ListenAndServe())
 }
 
 func (s *server) handleSubmit(w http.ResponseWriter, r *http.Request) {
@@ -104,13 +114,13 @@ func (s *server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Apply your trusted validation before writing anything.
 	if req.Score < 0 || req.Score > maxPlausibleScore {
-		log.Printf("rejecting implausible score %d from player %d", req.Score, who.PlayerID)
+		log.Print("rejecting implausible score")
 		http.Error(w, "score out of range", http.StatusBadRequest)
 		return
 	}
 
 	// 3. Submit authoritatively on the player's behalf.
-	if err := s.gg.Server.SubmitScore(ctx, playerToken, req.LeaderboardID, req.Score); err != nil {
+	if err := s.gg.Server.SubmitScore(ctx, who.PlayerID, req.LeaderboardID, req.Score); err != nil {
 		switch {
 		case errors.Is(err, ggscale.ErrNotFound):
 			http.Error(w, "leaderboard not found", http.StatusNotFound)
@@ -123,7 +133,7 @@ func (s *server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("accepted score %d for player %d on leaderboard %d", req.Score, who.PlayerID, req.LeaderboardID)
+	log.Print("accepted score")
 	w.WriteHeader(http.StatusNoContent)
 }
 

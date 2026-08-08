@@ -8,6 +8,8 @@ import (
 	"errors"
 )
 
+const realtimeOperationID = "realtimeWebSocket"
+
 type Message struct {
 	Type    string          `json:"type"`
 	Payload json.RawMessage `json:"payload,omitempty"`
@@ -24,5 +26,3 @@ func (*RealtimeClient) ReadMessage(context.Context) (Message, error) {
 }
 
 func (*RealtimeClient) Close() error { return nil }
-
-var ErrConnectionClosed = errors.New("ggscale: realtime connection closed")

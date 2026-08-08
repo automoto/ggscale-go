@@ -69,6 +69,27 @@ func checkServer() error {
 	return resp.Body.Close()
 }
 
+func TestIntegration_Health_and_RemoteConfig_ETag(t *testing.T) {
+	ctx := context.Background()
+	c, err := ggscale.NewClient(ggscale.Options{BaseURL: baseURL(), APIKey: publishableKey()})
+	require.NoError(t, err)
+
+	health, err := c.Health.Get(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", health.Status)
+	assert.NotEmpty(t, health.Version)
+
+	config, err := c.Config.Get(ctx, "")
+	require.NoError(t, err)
+	assert.NotEmpty(t, config.ETag)
+	assert.False(t, config.NotModified)
+
+	unchanged, err := c.Config.Get(ctx, config.ETag)
+	require.NoError(t, err)
+	assert.True(t, unchanged.NotModified)
+	assert.Nil(t, unchanged.Values)
+}
+
 // The auth routes carry a per-IP rate limit (burst 10), and every test
 // here calls from 127.0.0.1 — so the suite shares two anonymous players
 // instead of minting one per test.
@@ -155,6 +176,7 @@ func TestIntegration_Profile_Get_and_Patch_XUID(t *testing.T) {
 	assert.Equal(t, c.Session().PlayerID, p.ID)
 	assert.NotEmpty(t, p.ExternalID)
 	assert.Empty(t, p.Email, "anonymous player has no email")
+	assert.NotEmpty(t, p.FriendCode)
 
 	xuid := fmt.Sprintf("it-xuid-%d", p.ID)
 	require.NoError(t, c.Profile.Update(ctx, ggscale.ProfilePatch{XUID: &xuid}))
@@ -162,6 +184,16 @@ func TestIntegration_Profile_Get_and_Patch_XUID(t *testing.T) {
 	p, err = c.Profile.Get(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, xuid, p.XUID)
+
+	public, err := c.Players.Get(ctx, p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, p.ID, public.ID)
+	resolved, err := c.Players.Resolve(ctx, []int64{p.ID})
+	require.NoError(t, err)
+	require.Len(t, resolved, 1)
+	byCode, err := c.Players.ResolveFriendCode(ctx, p.FriendCode)
+	require.NoError(t, err)
+	assert.Equal(t, p.ID, byCode.ID)
 }
 
 func TestIntegration_Storage_CRUD_and_OCC(t *testing.T) {
@@ -211,16 +243,25 @@ func TestIntegration_Leaderboards_SubmitScore_Top_AroundMe(t *testing.T) {
 	player := newPlayerClient(t)
 	server := newServerClient(t)
 	playerID := player.Session().PlayerID
-	token := player.Session().AccessToken
+	boards, err := player.Leaderboards.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, boards, 1)
+	assert.Equal(t, seededLeaderboardID, boards[0].ID)
+	assert.False(t, boards[0].ClientSubmissions)
+
+	// The seeded board is authoritative, so player-tier submission is denied.
+	err = player.Leaderboards.Submit(ctx, seededLeaderboardID, 1500)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ggscale.ErrForbidden))
 
 	// Submission is secret-key-only: a publishable-key caller is refused,
 	// even via the server-tier method.
-	err := player.Server.SubmitScore(ctx, token, seededLeaderboardID, 1500)
+	err = player.Server.SubmitScore(ctx, playerID, seededLeaderboardID, 1500)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ggscale.ErrForbidden))
 
 	// The trusted (secret-key) server submits on the player's behalf.
-	require.NoError(t, server.Server.SubmitScore(ctx, token, seededLeaderboardID, 1500))
+	require.NoError(t, server.Server.SubmitScore(ctx, playerID, seededLeaderboardID, 1500))
 
 	top, err := player.Leaderboards.Top(ctx, seededLeaderboardID, 100)
 	require.NoError(t, err)
@@ -272,6 +313,18 @@ func TestIntegration_GameSession_Lifecycle(t *testing.T) {
 	assert.NotEmpty(t, sess.JoinCode)
 	assert.Equal(t, "open", sess.State)
 	require.Len(t, sess.Peers, 1, "host is the first peer")
+	assert.True(t, sess.ExpiresAt.After(time.Now()))
+
+	page, err := host.GameSessions.List(ctx, ggscale.GameSessionListOptions{TitleID: "integration"})
+	require.NoError(t, err)
+	listed := false
+	for _, candidate := range page.Items {
+		if candidate.SessionID == sess.SessionID {
+			listed = true
+			assert.Equal(t, host.Session().PlayerID, candidate.HostPlayerID)
+		}
+	}
+	assert.True(t, listed, "new public session appears in the server browser")
 
 	// Second player resolves the shared join code and joins.
 	resolvedID, err := joiner.GameSessions.Resolve(ctx, sess.JoinCode)
@@ -338,6 +391,26 @@ func TestIntegration_Server_VerifySession(t *testing.T) {
 	_, err = player.Server.VerifySession(ctx, player.Session().AccessToken)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ggscale.ErrForbidden))
+}
+
+func TestIntegration_Server_PlayerStorage(t *testing.T) {
+	ctx := context.Background()
+	player := newPlayerClient(t)
+	server := newServerClient(t)
+	playerID := player.Session().PlayerID
+
+	written, err := server.Server.StoragePut(ctx, playerID, "server-slot", map[string]any{"hp": 100})
+	require.NoError(t, err)
+	assert.Positive(t, written.Version)
+
+	read, err := server.Server.StorageGet(ctx, playerID, "server-slot")
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"hp":100}`, string(read.Value))
+
+	page, err := server.Server.StorageList(ctx, playerID, ggscale.ListOptions{KeyPrefix: "server-"})
+	require.NoError(t, err)
+	require.NotEmpty(t, page.Items)
+	assert.Equal(t, "server-slot", page.Items[0].Key)
 }
 
 // TestIntegration_Matchmaker_Tickets exercises the ticket lifecycle
@@ -424,8 +497,11 @@ func TestIntegration_Matchmaker_MatchOnly_and_Relay(t *testing.T) {
 	assert.NotEqual(t, a.m.IsHost, b.m.IsHost, "exactly one peer hosts")
 
 	// Relay is enabled in the stack, so ConnectP2P gathered match-scoped
-	// credentials for each peer. (No real TURN server here, so urls is empty.)
+	// credentials for each peer. The advertised TURN host is non-routable in
+	// this test stack; no relay connection is attempted.
 	require.NotNil(t, a.m.Relay, "relay enabled → credentials fetched")
+	require.NoError(t, a.m.RelayError)
+	require.NoError(t, b.m.RelayError)
 	assert.NotEmpty(t, a.m.Relay.Username)
 	assert.NotEmpty(t, a.m.Relay.Password)
 }
@@ -443,7 +519,7 @@ func TestIntegration_Relay_Credentials(t *testing.T) {
 	assert.NotEmpty(t, creds.Password)
 	assert.Positive(t, creds.TTL)
 	assert.Equal(t, "ggscale", creds.Realm)
-	// urls is empty in the single-node dev stack (no reachable TURN listener).
+	assert.Equal(t, []string{"turn:relay.invalid:3478?transport=udp"}, creds.URLs)
 }
 
 func TestIntegration_Realtime_Dial(t *testing.T) {

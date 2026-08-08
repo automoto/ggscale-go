@@ -86,32 +86,33 @@ func TestLeaderboards_AroundMe_with_entries(t *testing.T) {
 	assert.Equal(t, int64(7), res.Entries[1].PlayerID)
 }
 
-func TestServer_SubmitScore_uses_supplied_session_token(t *testing.T) {
+func TestServer_SubmitScore_uses_server_route_and_player_id(t *testing.T) {
 	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
 	c, _ := NewClient(Options{APIKey: "ggs_secret", Transport: ft})
 	// Note: no Client.SetSession — SubmitScore must NOT require a
 	// per-Client session, because a game server uses one Client for
 	// many concurrent players.
 
-	err := c.Server.SubmitScore(context.Background(), "player-123-jwt", 42, 1500)
+	err := c.Server.SubmitScore(context.Background(), 123, 42, 1500)
 	require.NoError(t, err)
 
 	assert.Equal(t, http.MethodPost, ft.gotReq.Method)
-	assert.Equal(t, "/v1/leaderboards/42/scores", ft.gotReq.Path)
+	assert.Equal(t, "/v1/server/leaderboards/42/scores", ft.gotReq.Path)
 	assert.Equal(t, "ggs_secret", ft.gotReq.APIKey)
-	assert.Equal(t, "player-123-jwt", ft.gotReq.SessionToken)
-	body, ok := ft.gotReq.Body.(submitScoreRequest)
+	assert.Empty(t, ft.gotReq.SessionToken)
+	body, ok := ft.gotReq.Body.(serverSubmitScoreRequest)
 	require.True(t, ok)
+	assert.Equal(t, int64(123), body.PlayerID)
 	assert.Equal(t, int64(1500), body.Score)
 }
 
-func TestServer_SubmitScore_requires_session_token(t *testing.T) {
+func TestServer_SubmitScore_requires_player_id(t *testing.T) {
 	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
 	c, _ := NewClient(Options{APIKey: "ggs_secret", Transport: ft})
 
-	err := c.Server.SubmitScore(context.Background(), "", 1, 100)
+	err := c.Server.SubmitScore(context.Background(), 0, 1, 100)
 	require.Error(t, err)
-	assert.Nil(t, ft.gotReq, "no request is sent without a session token")
+	assert.Nil(t, ft.gotReq, "no request is sent without a player ID")
 }
 
 func TestServer_SubmitScore_propagates_403_from_publishable_key(t *testing.T) {
@@ -122,7 +123,7 @@ func TestServer_SubmitScore_propagates_403_from_publishable_key(t *testing.T) {
 	defer srv.Close()
 
 	c, _ := NewClient(Options{APIKey: "ggp_publishable", BaseURL: srv.URL})
-	err := c.Server.SubmitScore(context.Background(), "player-jwt", 1, 100)
+	err := c.Server.SubmitScore(context.Background(), 42, 1, 100)
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrForbidden)
@@ -137,9 +138,9 @@ func TestServer_SubmitScore_does_not_mutate_client_session(t *testing.T) {
 	}
 	c.SetSession(clientSession)
 
-	err := c.Server.SubmitScore(context.Background(), "player-jwt", 1, 100)
+	err := c.Server.SubmitScore(context.Background(), 42, 1, 100)
 	require.NoError(t, err)
 
 	assert.Equal(t, "operator.jwt", c.Session().AccessToken)
-	assert.Equal(t, "player-jwt", ft.gotReq.SessionToken)
+	assert.Empty(t, ft.gotReq.SessionToken)
 }

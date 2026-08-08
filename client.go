@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -40,6 +42,9 @@ type Client struct {
 	Invites      *InvitesService
 	Presence     *PresenceService
 	Account      *AccountService
+	Config       *ConfigService
+	Players      *PlayersService
+	Health       *HealthService
 
 	// Server exposes server-tier endpoints (player session-token
 	// verification, player remote addresses) for game-server
@@ -47,9 +52,16 @@ type Client struct {
 	// player session required.
 	Server *ServerService
 
-	transport Transport
-	apiKey    string
-	baseURL   string
+	transport                 Transport
+	apiKey                    string
+	baseURL                   string
+	logger                    LogFunc
+	callTimeout               time.Duration
+	webSocketHandshakeTimeout time.Duration
+	realtimeReadLimit         int64
+	reconnectPolicy           ReconnectPolicy
+	onRealtimeReconnect       realtimeReconnectHook
+	realtimeHookMu            sync.Mutex
 
 	sessionMu       sync.RWMutex
 	session         *Session
@@ -70,6 +82,47 @@ type Options struct {
 	// APIKey is the tenant API key. Required.
 	APIKey string
 
+	// HTTPClient customizes proxy, TLS, and connection-pool behavior for the
+	// default transport. It is ignored when Transport is set.
+	HTTPClient *http.Client
+
+	// UserAgent overrides the default ggscale-go/<version> value.
+	UserAgent string
+
+	// CallTimeout is the overall budget for all attempts and backoff in one
+	// REST call. Zero preserves a caller deadline, or selects 30 seconds when
+	// the caller supplied none.
+	CallTimeout time.Duration
+
+	// MaxResponseBodyBytes bounds successful and error response bodies. Zero
+	// selects 64 MiB.
+	MaxResponseBodyBytes int64
+
+	// RetryPolicy configures safe automatic retries. Zero values select three
+	// total attempts with capped full-jitter exponential backoff.
+	RetryPolicy RetryPolicy
+
+	// Logger receives redacted structured transport events. Nil is silent.
+	Logger LogFunc
+
+	// WebSocketHandshakeTimeout bounds the opening handshake. Zero selects
+	// 15 seconds.
+	WebSocketHandshakeTimeout time.Duration
+
+	// RealtimeReadLimit bounds each received WebSocket message. Zero selects
+	// 1 MiB, matching the server's inbound message limit.
+	RealtimeReadLimit int64
+
+	// ReconnectPolicy configures opt-in reconnect after abnormal/network
+	// closure. Set Enabled to true only with an application recovery strategy.
+	ReconnectPolicy ReconnectPolicy
+
+	// OnRealtimeReconnect runs after a connection is restored so callers can
+	// re-read authoritative invite, matchmaking, friend, and presence state.
+	// Hooks run asynchronously and serially; panics and slow hooks are isolated
+	// from the read loop.
+	OnRealtimeReconnect func(context.Context, *Client)
+
 	// OnSessionUpdate, if non-nil, is called whenever the client
 	// installs or rotates a session — once after Login (or
 	// SetSession) and once after each automatic refresh. Useful for
@@ -85,21 +138,63 @@ func NewClient(opts Options) (*Client, error) {
 	if opts.APIKey == "" {
 		return nil, errors.New("ggscale: APIKey is required")
 	}
+	if opts.BaseURL != "" {
+		parsed, err := url.Parse(opts.BaseURL)
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return nil, errors.New("ggscale: BaseURL must be an absolute http or https URL")
+		}
+		if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return nil, errors.New("ggscale: BaseURL must not contain credentials, query, or fragment")
+		}
+		opts.BaseURL = strings.TrimRight(opts.BaseURL, "/")
+	}
 	t := opts.Transport
 	if t == nil {
 		if opts.BaseURL == "" {
 			return nil, errors.New("ggscale: either Transport or BaseURL is required")
 		}
-		t = &StdNetTransport{BaseURL: opts.BaseURL}
+		t = &StdNetTransport{
+			BaseURL:              opts.BaseURL,
+			Client:               opts.HTTPClient,
+			UserAgent:            opts.UserAgent,
+			CallTimeout:          opts.CallTimeout,
+			MaxResponseBodyBytes: opts.MaxResponseBodyBytes,
+			RetryPolicy:          opts.RetryPolicy,
+			Logger:               opts.Logger,
+		}
 	}
 
 	c := &Client{
-		transport:       t,
-		apiKey:          opts.APIKey,
-		baseURL:         opts.BaseURL,
-		onSessionUpdate: opts.OnSessionUpdate,
+		transport:                 t,
+		apiKey:                    opts.APIKey,
+		baseURL:                   opts.BaseURL,
+		onSessionUpdate:           opts.OnSessionUpdate,
+		logger:                    opts.Logger,
+		callTimeout:               opts.CallTimeout,
+		webSocketHandshakeTimeout: opts.WebSocketHandshakeTimeout,
+		realtimeReadLimit:         opts.RealtimeReadLimit,
+		reconnectPolicy:           opts.ReconnectPolicy,
+		onRealtimeReconnect:       opts.OnRealtimeReconnect,
 	}
-	c.Auth = &AuthService{transport: t, apiKey: opts.APIKey}
+	if c.webSocketHandshakeTimeout <= 0 {
+		c.webSocketHandshakeTimeout = 15 * time.Second
+	}
+	if c.realtimeReadLimit <= 0 {
+		c.realtimeReadLimit = 1 << 20
+	}
+	if c.reconnectPolicy.MaxAttempts <= 0 {
+		c.reconnectPolicy.MaxAttempts = 5
+	}
+	if c.reconnectPolicy.FirstDelayMax <= 0 {
+		c.reconnectPolicy.FirstDelayMax = 5 * time.Second
+	}
+	if c.reconnectPolicy.BaseDelay <= 0 {
+		c.reconnectPolicy.BaseDelay = time.Second
+	}
+	if c.reconnectPolicy.MaxDelay <= 0 {
+		c.reconnectPolicy.MaxDelay = 30 * time.Second
+	}
+	c.Auth = &AuthService{c: c, transport: t, apiKey: opts.APIKey}
 	c.Storage = &StorageService{c: c}
 	c.Leaderboards = &LeaderboardsService{c: c}
 	c.Profile = &ProfileService{c: c}
@@ -112,6 +207,9 @@ func NewClient(opts Options) (*Client, error) {
 	c.Invites = &InvitesService{c: c}
 	c.Presence = &PresenceService{c: c}
 	c.Account = &AccountService{c: c}
+	c.Config = &ConfigService{transport: t, apiKey: opts.APIKey}
+	c.Players = &PlayersService{c: c}
+	c.Health = &HealthService{transport: t}
 	c.Server = &ServerService{transport: t, apiKey: opts.APIKey}
 	return c, nil
 }
@@ -162,7 +260,12 @@ func (c *Client) notifySessionUpdate(s *Session) {
 	if c.onSessionUpdate == nil {
 		return
 	}
-	c.onSessionUpdate(s)
+	if s == nil {
+		c.onSessionUpdate(nil)
+		return
+	}
+	copy := *s
+	c.onSessionUpdate(&copy)
 }
 
 // Transport returns the underlying transport. Useful when constructing
@@ -176,6 +279,11 @@ func (c *Client) Transport() Transport {
 // when the session is within the refresh window, and retries once on
 // a 401 after refreshing.
 func (c *Client) callProtected(ctx context.Context, req *Request, out any) error {
+	ctx, cancel := withCallTimeout(ctx, c.callTimeout)
+	defer cancel()
+	if req.RequestID == "" {
+		req.RequestID = newRequestID()
+	}
 	if err := c.refreshIfNeeded(ctx); err != nil {
 		return err
 	}
@@ -194,7 +302,7 @@ func (c *Client) callProtected(ctx context.Context, req *Request, out any) error
 	}
 
 	// 401 — refresh once and retry once.
-	if rerr := c.refreshNow(ctx); rerr != nil {
+	if rerr := c.refreshAfterUnauthorized(ctx, req.SessionToken); rerr != nil {
 		return err // surface the original 401
 	}
 	if err := c.attachSession(req); err != nil {
@@ -228,7 +336,7 @@ func (c *Client) refreshIfNeeded(ctx context.Context) error {
 		return nil
 	}
 
-	updated, err := c.refreshUnderLock(ctx, false)
+	updated, err := c.refreshUnderLock(ctx, false, "")
 	if err != nil {
 		return err
 	}
@@ -238,9 +346,11 @@ func (c *Client) refreshIfNeeded(ctx context.Context) error {
 	return nil
 }
 
-// refreshNow forces a refresh regardless of expiry. Used after a 401.
-func (c *Client) refreshNow(ctx context.Context) error {
-	updated, err := c.refreshUnderLock(ctx, true)
+// refreshAfterUnauthorized avoids rotating a newly installed refresh token
+// when another concurrent request already refreshed the access token that
+// failed this call.
+func (c *Client) refreshAfterUnauthorized(ctx context.Context, failedAccessToken string) error {
+	updated, err := c.refreshUnderLock(ctx, true, failedAccessToken)
 	if err != nil {
 		return err
 	}
@@ -254,10 +364,13 @@ func (c *Client) refreshNow(ctx context.Context) error {
 // new session for the caller to deliver to OnSessionUpdate. force=false
 // re-checks the proactive window inside the write lock so refresh fires
 // once per expiry boundary; force=true bypasses the check (post-401).
-func (c *Client) refreshUnderLock(ctx context.Context, force bool) (*Session, error) {
+func (c *Client) refreshUnderLock(ctx context.Context, force bool, failedAccessToken string) (*Session, error) {
 	c.sessionMu.Lock()
 	defer c.sessionMu.Unlock()
 
+	if c.session != nil && failedAccessToken != "" && c.session.AccessToken != failedAccessToken {
+		return nil, nil
+	}
 	if c.session == nil || c.session.RefreshToken == "" {
 		if force {
 			return nil, errors.New("ggscale: cannot refresh — no refresh token")

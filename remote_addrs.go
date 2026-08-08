@@ -32,8 +32,9 @@ type AccountService struct {
 func (a *AccountService) RemoteAddrs(ctx context.Context) ([]RemoteAddr, error) {
 	var payload remoteAddrsPayload
 	err := a.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   "/v1/account/remote-addrs",
+		OperationID: "getAccountRemoteAddrs",
+		Method:      http.MethodGet,
+		Path:        "/v1/account/remote-addrs",
 	}, &payload)
 	if err != nil {
 		return nil, err
@@ -47,9 +48,10 @@ func (a *AccountService) RemoteAddrs(ctx context.Context) ([]RemoteAddr, error) 
 func (a *AccountService) SetRemoteAddrs(ctx context.Context, addrs []RemoteAddr) ([]RemoteAddr, error) {
 	var payload remoteAddrsPayload
 	err := a.c.callProtected(ctx, &Request{
-		Method: http.MethodPut,
-		Path:   "/v1/account/remote-addrs",
-		Body:   remoteAddrsPayload{Addresses: addrs},
+		OperationID: "putAccountRemoteAddrs",
+		Method:      http.MethodPut,
+		Path:        "/v1/account/remote-addrs",
+		Body:        remoteAddrsPayload{Addresses: addrs},
 	}, &payload)
 	if err != nil {
 		return nil, err

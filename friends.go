@@ -2,6 +2,7 @@ package ggscale
 
 import (
 	"context"
+	"iter"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -74,14 +75,27 @@ func (f *FriendsService) List(ctx context.Context, opts FriendsListOptions) (*Fr
 	}
 	var page FriendsPage
 	err := f.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   "/v1/friends",
-		Query:  q,
+		OperationID: "listFriends",
+		Method:      http.MethodGet,
+		Path:        "/v1/friends",
+		Query:       q,
 	}, &page)
 	if err != nil {
 		return nil, err
 	}
 	return &page, nil
+}
+
+// All iterates friend entries across every cursor page.
+func (f *FriendsService) All(ctx context.Context, opts FriendsListOptions) iter.Seq2[Friend, error] {
+	return cursorSequence(opts.Cursor, func(cursor string) ([]Friend, string, error) {
+		opts.Cursor = cursor
+		page, err := f.List(ctx, opts)
+		if err != nil {
+			return nil, "", err
+		}
+		return page.Items, page.NextCursor, nil
+	})
 }
 
 // Request sends (or re-sends) a friend request to playerID and returns
@@ -91,8 +105,9 @@ func (f *FriendsService) List(ctx context.Context, opts FriendsListOptions) (*Fr
 func (f *FriendsService) Request(ctx context.Context, playerID int64) (string, error) {
 	var res friendStatusResponse
 	err := f.c.callProtected(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   friendPath(playerID) + "/request",
+		OperationID: "requestFriend",
+		Method:      http.MethodPost,
+		Path:        friendPath(playerID) + "/request",
 	}, &res)
 	if err != nil {
 		return "", err
@@ -104,8 +119,9 @@ func (f *FriendsService) Request(ctx context.Context, playerID int64) (string, e
 // ErrConflict when the edge is not in a state that can be accepted.
 func (f *FriendsService) Accept(ctx context.Context, playerID int64) error {
 	return f.c.callProtected(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   friendPath(playerID) + "/accept",
+		OperationID: "acceptFriend",
+		Method:      http.MethodPost,
+		Path:        friendPath(playerID) + "/accept",
 	}, nil)
 }
 
@@ -113,16 +129,18 @@ func (f *FriendsService) Accept(ctx context.Context, playerID int64) error {
 // from playerID.
 func (f *FriendsService) Reject(ctx context.Context, playerID int64) error {
 	return f.c.callProtected(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   friendPath(playerID) + "/reject",
+		OperationID: "rejectFriend",
+		Method:      http.MethodPost,
+		Path:        friendPath(playerID) + "/reject",
 	}, nil)
 }
 
 // Remove deletes the friend edge with playerID in either direction.
 func (f *FriendsService) Remove(ctx context.Context, playerID int64) error {
 	return f.c.callProtected(ctx, &Request{
-		Method: http.MethodDelete,
-		Path:   friendPath(playerID),
+		OperationID: "deleteFriend",
+		Method:      http.MethodDelete,
+		Path:        friendPath(playerID),
 	}, nil)
 }
 
@@ -131,8 +149,9 @@ func (f *FriendsService) Remove(ctx context.Context, playerID int64) error {
 // the block).
 func (f *FriendsService) Block(ctx context.Context, playerID int64) error {
 	return f.c.callProtected(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   friendPath(playerID) + "/block",
+		OperationID: "blockFriend",
+		Method:      http.MethodPost,
+		Path:        friendPath(playerID) + "/block",
 	}, nil)
 }
 
@@ -140,8 +159,9 @@ func (f *FriendsService) Block(ctx context.Context, playerID int64) error {
 // any friendship the block severed.
 func (f *FriendsService) Unblock(ctx context.Context, playerID int64) error {
 	return f.c.callProtected(ctx, &Request{
-		Method: http.MethodPost,
-		Path:   friendPath(playerID) + "/unblock",
+		OperationID: "unblockFriend",
+		Method:      http.MethodPost,
+		Path:        friendPath(playerID) + "/unblock",
 	}, nil)
 }
 
@@ -151,8 +171,9 @@ func (f *FriendsService) Unblock(ctx context.Context, playerID int64) error {
 func (f *FriendsService) RemoteAddrs(ctx context.Context, playerID int64) ([]RemoteAddr, error) {
 	var payload remoteAddrsPayload
 	err := f.c.callProtected(ctx, &Request{
-		Method: http.MethodGet,
-		Path:   friendPath(playerID) + "/remote-addrs",
+		OperationID: "getFriendRemoteAddrs",
+		Method:      http.MethodGet,
+		Path:        friendPath(playerID) + "/remote-addrs",
 	}, &payload)
 	if err != nil {
 		return nil, err

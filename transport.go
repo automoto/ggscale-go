@@ -29,6 +29,7 @@ type Transport interface {
 // these and hand it to Transport.Call; tests can capture and inspect
 // it directly without going through HTTP.
 type Request struct {
+	OperationID  string     // stable OpenAPI operationId, used for telemetry
 	Method       string     // GET, POST, PUT, PATCH, DELETE
 	Path         string     // "/v1/storage/objects/foo"
 	Query        url.Values // optional
@@ -36,6 +37,32 @@ type Request struct {
 	APIKey       string     // required
 	SessionToken string     // optional; set for player routes
 	IfMatch      string     // optional; only storage.Put uses it
+	IfNoneMatch  string     // optional; remote config conditional request
+
+	// ReplaySafe explicitly opts a mutating request into transport retries.
+	// Leave false unless the operation is safe to repeat across concurrent
+	// writers, not merely HTTP-idempotent in isolation.
+	ReplaySafe bool
+
+	// RequestID overrides the generated X-Request-Id. It is retained across
+	// every attempt of one logical call.
+	RequestID string
+
+	// AllowNotModified treats 304 as a successful bodyless response.
+	AllowNotModified bool
+
+	// Response, when non-nil, receives response metadata.
+	Response *ResponseMetadata
+}
+
+// ResponseMetadata captures response details that are useful without exposing
+// response bodies or authentication headers.
+type ResponseMetadata struct {
+	StatusCode   int
+	RequestID    string
+	ETag         string
+	CacheControl string
+	NotModified  bool
 }
 
 // Error is the typed error returned for any non-2xx response. Use
@@ -43,16 +70,64 @@ type Request struct {
 // etc.) to branch on common cases; cast to *Error with errors.As to
 // read details like RetryAfter or ConflictVersion.
 type Error struct {
-	Status          int
-	Code            string
+	Status   int
+	Type     string
+	Title    string
+	Detail   string
+	Instance string
+	Code     string
+	// Message is retained for source compatibility. It mirrors Detail when a
+	// Problem Details response is returned.
 	Message         string
+	RequestID       string
 	RetryAfter      time.Duration
 	ConflictVersion int64
+	// DiagnosticBody is a bounded response-body excerpt used only when the
+	// server did not return parseable Problem Details.
+	DiagnosticBody string
 	// Details holds the problem-details `errors` array when present. The
 	// 409 ticket_already_active response, for example, carries one entry
 	// with Location "active_ticket_id".
 	Details []ErrorDetail
 }
+
+// APIError is the preferred descriptive name for Error.
+type APIError = Error
+
+// FailureKind classifies failures that happen before an HTTP error response is
+// available.
+type FailureKind string
+
+// FailureCanceled through FailureProtocol are the stable failure classes
+// reported by RequestError.Kind.
+const (
+	FailureCanceled FailureKind = "canceled"
+	FailureTimeout  FailureKind = "timeout"
+	FailureDNS      FailureKind = "dns"
+	FailureConnect  FailureKind = "connect"
+	FailureTLS      FailureKind = "tls"
+	FailureEncode   FailureKind = "encode"
+	FailureDecode   FailureKind = "decode"
+	FailureProtocol FailureKind = "protocol"
+)
+
+// RequestError is returned for transport, encoding, decoding, cancellation,
+// and protocol failures. Unwrap exposes the original cause to errors.Is/As.
+type RequestError struct {
+	Kind        FailureKind
+	OperationID string
+	RequestID   string
+	Err         error
+}
+
+func (e *RequestError) Error() string {
+	if e.OperationID != "" {
+		return fmt.Sprintf("ggscale: %s %s: %v", e.OperationID, e.Kind, e.Err)
+	}
+	return fmt.Sprintf("ggscale: %s: %v", e.Kind, e.Err)
+}
+
+func (e *RequestError) Unwrap() error { return e.Err }
 
 // ErrorDetail is one entry from a problem-details `errors` array — a
 // validation failure or a structured extension. Value is the raw JSON of
@@ -108,9 +183,9 @@ func (e *Error) Is(target error) bool {
 	case ErrValidation:
 		return e.Status == http.StatusUnprocessableEntity
 	case ErrTicketActive:
-		// The stable identifier lives in the machine-readable `code`
-		// extension; fall back to Message for the legacy envelope, which
-		// carried it there.
+		// v0.9.4 puts the stable slug in Problem Details `detail`, mirrored to
+		// Message here. Accept Code as well for installations that emit the
+		// optional machine-readable extension.
 		return e.Status == http.StatusConflict &&
 			(e.Code == "ticket_already_active" || e.Message == "ticket_already_active")
 	}

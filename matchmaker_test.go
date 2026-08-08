@@ -298,6 +298,34 @@ func TestMatchmakerService_ConnectP2P_game_session_joins(t *testing.T) {
 	assert.NotNil(t, joinAddr["public_addr"], "join announces the local public address")
 }
 
+func TestMatchmakerService_ConnectP2P_surfaces_best_effort_relay_error(t *testing.T) {
+	ft := &fakeTransport{
+		respond: func(req *Request) (any, error) {
+			switch req.OperationID {
+			case "createMatchmakerTicket":
+				return map[string]any{
+					"id": int64(7), "status": "matched", "mode": "match_only",
+					"match_id": "mm_room", "host_player_id": int64(41),
+					"created_at": time.Now().UTC().Format(time.RFC3339Nano),
+				}, nil
+			case "issueRelayCredentials":
+				return nil, &Error{Status: http.StatusForbidden, Message: "relay disabled"}
+			default:
+				return nil, &Error{Status: http.StatusNotFound}
+			}
+		},
+	}
+	c, err := NewClient(Options{APIKey: "k", Transport: ft})
+	require.NoError(t, err)
+	c.SetSession(&Session{AccessToken: "tok", PlayerID: 41, ExpiresAt: time.Now().Add(time.Hour)})
+
+	p2p, err := c.Matchmaker.ConnectP2P(context.Background(), MatchRequest{Mode: ModeMatchOnly}, GameSessionAddr{})
+	require.NoError(t, err, "relay remains best-effort when a direct connection may work")
+	assert.Nil(t, p2p.Relay)
+	require.Error(t, p2p.RelayError)
+	assert.ErrorIs(t, p2p.RelayError, ErrForbidden)
+}
+
 // JSON round-trip helper used by RequestMatch in realtime_test.go.
 func mustMarshal(v any) json.RawMessage {
 	b, err := json.Marshal(v)

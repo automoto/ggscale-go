@@ -152,6 +152,20 @@ func TestAnonymousAuth_SaveSession_is_noop_with_empty_path(t *testing.T) {
 	a.SaveSession(&Session{AccessToken: "x", RefreshToken: "y"})
 }
 
+func TestAnonymousAuth_SaveSession_nil_removes_revoked_session_file(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.json")
+	a := NewAnonymousAuth(nil, "ggp_key", path)
+	a.SaveSession(&Session{
+		AccessToken: "revoked.access", RefreshToken: "revoked.refresh",
+		ExpiresAt: time.Now().Add(time.Hour),
+	})
+	require.FileExists(t, path)
+
+	a.SaveSession(nil)
+	_, err := os.Stat(path)
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
 func TestDefaultSessionPath_returns_per_game_path(t *testing.T) {
 	a := DefaultSessionPath("doomerang-mp")
 	b := DefaultSessionPath("other-game")
