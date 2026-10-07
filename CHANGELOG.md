@@ -3,6 +3,16 @@
 All notable changes to `ggscale-go` are documented here. The project is
 pre-1.0; minor versions may contain breaking changes until v1.0.0.
 
+## [Unreleased]
+
+### Changed
+
+- A write is now retried when the request was never sent: a DNS failure, or
+  a connection that could not be opened. Such a failure proves the server did
+  not run the write. A write is still not retried after a failure on an open
+  connection, or after an HTTP response, unless it has an `Idempotency-Key`
+  or sets `ReplaySafe`.
+
 ## [0.7.0]
 
 Synchronizes the SDK with ggscale server **v0.9.71**: player data deletion,

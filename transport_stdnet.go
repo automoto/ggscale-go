@@ -33,8 +33,10 @@ const (
 
 // RetryPolicy controls automatic retries. Zero values select the documented
 // defaults: 3 total attempts, 250ms base delay, and a 10s cap. Set MaxAttempts
-// to 1 to disable retries. Mutating methods are never retried unless the
-// request explicitly sets ReplaySafe.
+// to 1 to disable retries. A write is retried after a response or after a
+// failure on an open connection only when the request sets ReplaySafe or an
+// Idempotency-Key. Any request is retried when it was never sent: a DNS
+// failure or a connection that could not be opened.
 type RetryPolicy struct {
 	MaxAttempts int
 	BaseDelay   time.Duration
@@ -129,7 +131,7 @@ func (t *StdNetTransport) Call(parent context.Context, req *Request, out any) (r
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return wrapRequestError(req, requestID, classifyContextError(ctxErr), ctxErr)
 			}
-			if attempt < maxAttempts && requestIsReplayable(req) && retryableTransportError(err) {
+			if attempt < maxAttempts && retryableTransportError(err) && (requestIsReplayable(req) || requestNotSent(err)) {
 				delay := t.retryDelay(attempt, baseDelay, maxDelay)
 				t.logRetry(req, requestID, attempt, "transport", delay, 0)
 				if err := sleepContext(ctx, delay); err != nil {
@@ -494,6 +496,14 @@ func retryableStatus(status int) bool {
 	default:
 		return false
 	}
+}
+
+// requestNotSent reports whether err happened before the request reached
+// the server: a DNS failure or a connection that could not be opened. Any
+// method, writes included, is then safe to retry.
+func requestNotSent(err error) bool {
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Op == "dial"
 }
 
 func retryableTransportError(err error) bool {
