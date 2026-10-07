@@ -65,6 +65,7 @@ parties, realtime events, and WebSocket tickets for browser builds. Version
 
 ### Changed
 
+- `go.mod` requires Go 1.26.6, the same as the gg-scale server.
 - `openapi.yaml` in the gg-scale repository is the only contract. The vendored
   spec, the operation manifest and `internal/cmd/openapi-operations` are
   removed. `TestOpenAPIOperationCoverage` reads the spec from `GGSCALE_SPEC`;

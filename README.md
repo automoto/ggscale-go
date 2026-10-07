@@ -10,7 +10,7 @@ The SDK's only runtime dependency is [`github.com/coder/websocket`](https://gith
 go get github.com/automoto/ggscale-go
 ```
 
-Requires Go 1.26 or later.
+Requires Go 1.26.6 or later.
 
 ## Quickstart
 
