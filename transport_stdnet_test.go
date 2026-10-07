@@ -630,3 +630,72 @@ func TestStdNetTransport_should_not_retry_post_without_idempotency_key(t *testin
 
 	assert.Equal(t, int32(1), hits)
 }
+
+// postAttempts sends one POST through a transport whose every attempt fails
+// with failure, and returns how many attempts it made.
+func postAttempts(t *testing.T, failure error) int32 {
+	t.Helper()
+	var attempts atomic.Int32
+	httpClient := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		attempts.Add(1)
+		return nil, failure
+	})}
+	tr := &ggscale.StdNetTransport{
+		BaseURL: "http://ggscale.invalid", Client: httpClient,
+		RetryPolicy: ggscale.RetryPolicy{
+			MaxAttempts: 3,
+			Jitter:      func(time.Duration) time.Duration { return 0 },
+		},
+	}
+
+	_ = tr.Call(context.Background(), &ggscale.Request{
+		Method: http.MethodPost, Path: "/v1/leaderboards/1/scores", Body: map[string]int{"score": 1},
+	}, nil)
+	return attempts.Load()
+}
+
+func TestStdNetTransport_should_retry_post_when_connect_fails(t *testing.T) {
+	attempts := postAttempts(t, &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")})
+
+	assert.Equal(t, int32(3), attempts)
+}
+
+func TestStdNetTransport_should_retry_post_when_dns_fails_for_now(t *testing.T) {
+	attempts := postAttempts(t, &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "server misbehaving", IsTemporary: true}})
+
+	assert.Equal(t, int32(3), attempts)
+}
+
+func TestStdNetTransport_should_not_retry_post_when_host_does_not_exist(t *testing.T) {
+	attempts := postAttempts(t, &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host", IsNotFound: true}})
+
+	assert.Equal(t, int32(1), attempts)
+}
+
+// A real refused connection, not a hand-made error: net/http must report it
+// as a dial failure, or writes would not be retried.
+func TestStdNetTransport_should_retry_post_to_a_closed_port(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := listener.Addr().String()
+	require.NoError(t, listener.Close())
+	var retries atomic.Int32
+	tr := &ggscale.StdNetTransport{
+		BaseURL: "http://" + addr,
+		RetryPolicy: ggscale.RetryPolicy{
+			MaxAttempts: 3,
+			Jitter:      func(time.Duration) time.Duration { return 0 },
+		},
+		Logger: func(e ggscale.LogEvent) {
+			if e.Event == "http.retry" {
+				retries.Add(1)
+			}
+		},
+	}
+
+	_ = tr.Call(context.Background(), &ggscale.Request{
+		Method: http.MethodPost, Path: "/v1/leaderboards/1/scores", Body: map[string]int{"score": 1},
+	}, nil)
+
+	assert.Equal(t, int32(2), retries.Load())
+}

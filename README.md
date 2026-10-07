@@ -184,8 +184,10 @@ go member.Parties.Watch(ctx, party.ID, func(ev ggscale.PartyEvent) error {
   retried: `GET` and `HEAD`, and writes with an `Idempotency-Key`
   (`Parties.Queue`, `Parties.Rematch`) or `Request.ReplaySafe`. Only
   connection failures and 408, 429, 502, 503 and 504 are retried, and a
-  `Retry-After` from the server is followed. Other writes are never retried,
-  because a lost response does not show whether the write ran. Configure with
+  `Retry-After` from the server is followed. Any request, writes included, is
+  also retried when it was never sent: a DNS failure, or a connection that
+  could not be opened. Other writes are not retried after a failure, because
+  a lost response does not show whether the write ran. Configure with
   `Options.RetryPolicy`.
 - **Realtime reconnect:** on. See above; turn it off with
   `ReconnectPolicy{Disabled: true}`.
