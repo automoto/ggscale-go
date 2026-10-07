@@ -45,6 +45,8 @@ type Client struct {
 	Config       *ConfigService
 	Players      *PlayersService
 	Health       *HealthService
+	Parties      *PartiesService
+	Realtime     *RealtimeService
 
 	// Server exposes server-tier endpoints (player session-token
 	// verification, player remote addresses) for game-server
@@ -113,8 +115,8 @@ type Options struct {
 	// 1 MiB, matching the server's inbound message limit.
 	RealtimeReadLimit int64
 
-	// ReconnectPolicy configures opt-in reconnect after abnormal/network
-	// closure. Set Enabled to true only with an application recovery strategy.
+	// ReconnectPolicy configures reconnect after an abnormal or network
+	// closure. Reconnect is on by default; set Disabled to turn it off.
 	ReconnectPolicy ReconnectPolicy
 
 	// OnRealtimeReconnect runs after a connection is restored so callers can
@@ -210,6 +212,8 @@ func NewClient(opts Options) (*Client, error) {
 	c.Config = &ConfigService{transport: t, apiKey: opts.APIKey}
 	c.Players = &PlayersService{c: c}
 	c.Health = &HealthService{transport: t}
+	c.Parties = &PartiesService{c: c}
+	c.Realtime = &RealtimeService{c: c}
 	c.Server = &ServerService{transport: t, apiKey: opts.APIKey}
 	return c, nil
 }

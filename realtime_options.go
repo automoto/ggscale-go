@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-// ReconnectPolicy controls opt-in WebSocket reconnects after retryable
-// closures. Set Enabled explicitly; reconnecting cannot replay events emitted
-// during an outage, so callers should also provide OnRealtimeReconnect and
-// reconcile authoritative state. Other zero values select five attempts, a
-// random 0-5 second first delay, then capped full-jitter exponential backoff.
+// ReconnectPolicy controls WebSocket reconnects after retryable closures.
+// Reconnect is on by default. The server does not replay events sent during
+// an outage, so use OnRealtimeReconnect to read the authoritative state again.
+// Zero values select five attempts, a random 0-5 second first delay, then
+// capped full-jitter exponential backoff. A handshake Retry-After is followed.
 type ReconnectPolicy struct {
-	// Enabled opts into reconnecting after an abnormal connection closure.
-	Enabled       bool
+	// Disabled turns reconnect off: a dropped connection ends ReadMessage.
+	Disabled      bool
 	MaxAttempts   int
 	FirstDelayMax time.Duration
 	BaseDelay     time.Duration

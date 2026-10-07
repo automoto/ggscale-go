@@ -18,6 +18,7 @@ type Transport interface {
 	// req.APIKey is sent as Authorization: Bearer.
 	// req.SessionToken (if non-empty) is sent as X-Session-Token.
 	// req.IfMatch (if non-empty) is sent as If-Match.
+	// req.Header entries are sent as extra headers.
 	// req.Body is JSON-marshalled (skipped if nil).
 	// out is JSON-unmarshalled from a 2xx response (skipped if nil).
 	//
@@ -38,6 +39,13 @@ type Request struct {
 	SessionToken string     // optional; set for player routes
 	IfMatch      string     // optional; only storage.Put uses it
 	IfNoneMatch  string     // optional; remote config conditional request
+
+	// Header holds extra request headers, for example Idempotency-Key. The
+	// transport sets them after its own headers, so do not put
+	// authentication headers here. An Idempotency-Key also makes the request
+	// retryable like ReplaySafe: set it only where the server removes
+	// duplicate requests with that key.
+	Header http.Header
 
 	// ReplaySafe explicitly opts a mutating request into transport retries.
 	// Leave false unless the operation is safe to repeat across concurrent
@@ -186,10 +194,23 @@ func (e *Error) Is(target error) bool {
 		// v0.9.4 puts the stable slug in Problem Details `detail`, mirrored to
 		// Message here. Accept Code as well for installations that emit the
 		// optional machine-readable extension.
-		return e.Status == http.StatusConflict &&
-			(e.Code == "ticket_already_active" || e.Message == "ticket_already_active")
+		return e.Status == http.StatusConflict && e.hasSlug("ticket_already_active")
+	case ErrStaleVersion:
+		return e.Status == http.StatusConflict && e.hasSlug("stale_version")
+	case ErrPartyEnqueueDisabled:
+		return e.Status == http.StatusServiceUnavailable && e.hasSlug("party_enqueue_disabled")
+	case ErrCodeCooldown:
+		return e.Status == http.StatusTooManyRequests && e.hasSlug("code_redemption_cooldown")
+	case ErrDeleteRequestedByTeam:
+		return e.Status == http.StatusForbidden && e.hasSlug("delete_requested_by_team")
 	}
 	return false
+}
+
+// hasSlug reports whether the stable error slug is in Code or in Message
+// (the server puts it in Problem Details `detail`).
+func (e *Error) hasSlug(slug string) bool {
+	return e.Code == slug || e.Message == slug
 }
 
 // Sentinel errors for the common ggscale API failure modes. Match
@@ -210,4 +231,19 @@ var (
 	// player already has an active ticket in the project. Read the active
 	// ticket id with (*Error).ActiveTicketID.
 	ErrTicketActive = errors.New("ggscale: player already has an active matchmaking ticket")
+	// ErrStaleVersion is the 409 a party write returns when expected_version
+	// is not the party's current version. Read the party again and retry.
+	ErrStaleVersion = errors.New("ggscale: stale party version")
+	// ErrPartyEnqueueDisabled is the 503 from Parties.Queue and
+	// Parties.Rematch when the server turns party queue off.
+	ErrPartyEnqueueDisabled = errors.New("ggscale: party queue is disabled on this server")
+	// ErrCodeCooldown is the 429 from Parties.JoinByCode after too many wrong
+	// codes. Wait for (*Error).RetryAfter before the next try; the server sets
+	// the cooldown, so do not assume a fixed value.
+	ErrCodeCooldown = errors.New("ggscale: party code cooldown")
+	// ErrDeleteRequestedByTeam is the 403 from Auth.CancelDelete when the
+	// game's team requested the deletion. Only the team can cancel it. The
+	// error also matches ErrForbidden; a 403 for a revoked key or a disabled
+	// tenant does not match it.
+	ErrDeleteRequestedByTeam = errors.New("ggscale: the game's team requested this deletion")
 )

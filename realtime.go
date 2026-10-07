@@ -1,5 +1,3 @@
-//go:build !js
-
 package ggscale
 
 import (
@@ -45,8 +43,14 @@ type RealtimeClient struct {
 }
 
 // DialRealtime opens a WebSocket connection to the server's /v1/ws
-// endpoint. The connection carries the API key and current session token
-// as headers. Requires a player session.
+// endpoint. Requires a player session. A native build sends the API key and
+// session token as headers. A browser build (GOOS=js) cannot set WebSocket
+// headers, so it gets a one-time ticket from Realtime.CreateTicket for each
+// dial, reconnects included.
+//
+// The server keeps one socket per player: a new dial closes the player's
+// older socket. Use one realtime reader at a time (DialRealtime,
+// WaitForMatch, Parties.Watch, or Parties.WaitForMatch).
 //
 // Refreshes the session proactively when it's near expiry, and retries
 // once on a 401 after a forced refresh — mirroring callProtected so
@@ -137,24 +141,7 @@ func (c *Client) dialRealtimeOnce(ctx context.Context, requestID string) (*Realt
 		return nil, 0, "", errors.New("ggscale: no session — call Login or SetSession first")
 	}
 
-	headers := http.Header{}
-	headers.Set("Authorization", "Bearer "+c.apiKey)
-	headers.Set("X-Session-Token", sess.AccessToken)
-	headers.Set("X-Request-Id", requestID)
-	ua := userAgent
-	var httpClient *http.Client
-	if transport, ok := c.transport.(*StdNetTransport); ok {
-		httpClient = transport.client()
-		if transport.UserAgent != "" {
-			ua = transport.UserAgent
-		}
-	}
-	headers.Set("User-Agent", ua)
-
-	conn, resp, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
-		HTTPClient: httpClient,
-		HTTPHeader: headers,
-	})
+	conn, resp, err := c.dialWebSocket(ctx, wsURL, requestID, sess.AccessToken)
 	if err != nil {
 		status := 0
 		retryAfter := time.Duration(0)
@@ -239,7 +226,7 @@ func (r *RealtimeClient) ReadMessage(ctx context.Context) (Message, error) {
 }
 
 func (r *RealtimeClient) shouldReconnect(closeCode int) bool {
-	if r.owner == nil || !r.reconnectPolicy.Enabled {
+	if r.owner == nil || r.reconnectPolicy.Disabled {
 		return false
 	}
 	r.mu.Lock()
@@ -412,4 +399,10 @@ func (r *RealtimeClient) Close() error {
 		return nil
 	}
 	return conn.Close(websocket.StatusNormalClosure, "")
+}
+
+// realtimeTicketURL adds a one-time ticket to the WebSocket URL. A browser
+// dial uses it instead of the auth headers.
+func realtimeTicketURL(wsURL, ticket string) string {
+	return wsURL + "?ticket=" + url.QueryEscape(ticket)
 }

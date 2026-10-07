@@ -77,6 +77,15 @@ type resetPasswordConfirmRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
+type passwordRequest struct {
+	Password string `json:"password,omitempty"`
+}
+
+type deleteCancelRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
 type verifyRequest struct {
 	Email string `json:"email"`
 	Code  string `json:"code"`
@@ -250,21 +259,66 @@ func (a *AuthService) ChangePassword(ctx context.Context, currentPassword, newPa
 }
 
 // Disable deactivates the current player and clears the local session after
-// the server revokes it. Password may be empty for anonymous players.
+// the server revokes it. Password may be empty for anonymous players. A
+// project admin can re-enable the player with all data intact; permanent
+// deletion is requested with RequestDelete.
 func (a *AuthService) Disable(ctx context.Context, password string) error {
 	err := a.c.callProtected(ctx, &Request{
 		OperationID: "disablePlayer",
 		Method:      http.MethodPost,
 		Path:        "/v1/auth/disable",
-		Body: struct {
-			Password string `json:"password,omitempty"`
-		}{Password: password},
+		Body:        passwordRequest{Password: password},
 	}, nil)
 	if err != nil {
 		return err
 	}
 	a.c.SetSession(nil)
 	return nil
+}
+
+// PendingDelete describes a scheduled deletion returned by RequestDelete.
+// The player's data in this project is purged permanently once the server's
+// grace period passes.
+type PendingDelete struct {
+	DeleteRequestedAt time.Time `json:"delete_requested_at"`
+	ScheduledPurgeAt  time.Time `json:"scheduled_purge_at"`
+}
+
+// RequestDelete schedules permanent deletion of the current player's data in
+// this project and clears the local session after the server revokes it. Data
+// in other projects and the global account are untouched. Password may be
+// empty for anonymous players. Players with credentials can call CancelDelete
+// until the purge runs; anonymous players cancel through a linked account or
+// the project's support.
+func (a *AuthService) RequestDelete(ctx context.Context, password string) (*PendingDelete, error) {
+	var res PendingDelete
+	err := a.c.callProtected(ctx, &Request{
+		OperationID: "requestPlayerDelete",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/delete",
+		Body:        passwordRequest{Password: password},
+	}, &res)
+	if err != nil {
+		return nil, err
+	}
+	a.c.SetSession(nil)
+	return &res, nil
+}
+
+// CancelDelete clears a pending deletion and re-enables sign-in. It takes
+// credentials rather than a session because RequestDelete revoked every
+// session. The server answers 404 for an unknown email, a wrong password and
+// no pending deletion alike, so a failure reveals nothing about the account.
+// When the game's team requested the deletion, the error matches
+// ErrDeleteRequestedByTeam: only the team can cancel it.
+func (a *AuthService) CancelDelete(ctx context.Context, email, password string) error {
+	return a.transport.Call(ctx, &Request{
+		OperationID: "authDeleteCancel",
+		Method:      http.MethodPost,
+		Path:        "/v1/auth/delete/cancel",
+		APIKey:      a.apiKey,
+		Body:        deleteCancelRequest{Email: email, Password: password},
+	}, nil)
 }
 
 // EmailPasswordAuth authenticates via POST /v1/auth/login.

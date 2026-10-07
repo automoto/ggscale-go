@@ -226,3 +226,71 @@ func TestAuthService_Logout_different_token_keeps_installed_session(t *testing.T
 	require.NotNil(t, c.Session())
 	assert.Equal(t, "current", c.Session().RefreshToken)
 }
+
+func TestAuthService_RequestDelete_returns_purge_schedule(t *testing.T) {
+	requested := time.Date(2026, 8, 23, 10, 0, 0, 0, time.UTC)
+	purge := requested.AddDate(0, 0, 30)
+	ft := &fakeTransport{
+		respond: func(*Request) (any, error) {
+			return map[string]any{
+				"delete_requested_at": requested,
+				"scheduled_purge_at":  purge,
+			}, nil
+		},
+	}
+	c := newClientWithFake(t, ft)
+
+	result, err := c.Auth.RequestDelete(context.Background(), "correct-horse")
+	require.NoError(t, err)
+	assert.Equal(t, purge, result.ScheduledPurgeAt)
+}
+
+func TestAuthService_RequestDelete_posts_password_with_session(t *testing.T) {
+	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
+	c := newClientWithFake(t, ft)
+
+	_, err := c.Auth.RequestDelete(context.Background(), "correct-horse")
+	require.NoError(t, err)
+	assert.Equal(t, "/v1/auth/delete", ft.gotReq.Path)
+	assert.Equal(t, "test-jwt", ft.gotReq.SessionToken)
+	body, ok := ft.gotReq.Body.(passwordRequest)
+	require.True(t, ok)
+	assert.Equal(t, "correct-horse", body.Password)
+}
+
+func TestAuthService_RequestDelete_clears_revoked_session(t *testing.T) {
+	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
+	c := newClientWithFake(t, ft)
+
+	_, err := c.Auth.RequestDelete(context.Background(), "")
+	require.NoError(t, err)
+	assert.Nil(t, c.Session(), "the server revoked every session")
+}
+
+func TestAuthService_RequestDelete_keeps_session_on_error(t *testing.T) {
+	ft := &fakeTransport{
+		respond: func(*Request) (any, error) {
+			return nil, &Error{Status: http.StatusUnauthorized}
+		},
+	}
+	c := newClientWithFake(t, ft)
+
+	_, err := c.Auth.RequestDelete(context.Background(), "wrong-password")
+	require.Error(t, err)
+	assert.NotNil(t, c.Session())
+}
+
+func TestAuthService_CancelDelete_posts_credentials_without_session(t *testing.T) {
+	ft := &fakeTransport{respond: func(*Request) (any, error) { return nil, nil }}
+	svc := &AuthService{transport: ft, apiKey: "k"}
+
+	err := svc.CancelDelete(context.Background(), "player@example.com", "correct-horse")
+	require.NoError(t, err)
+	assert.Equal(t, "/v1/auth/delete/cancel", ft.gotReq.Path)
+	assert.Equal(t, "k", ft.gotReq.APIKey)
+	assert.Empty(t, ft.gotReq.SessionToken, "the delete request revoked every session")
+	body, ok := ft.gotReq.Body.(deleteCancelRequest)
+	require.True(t, ok)
+	assert.Equal(t, "player@example.com", body.Email)
+	assert.Equal(t, "correct-horse", body.Password)
+}

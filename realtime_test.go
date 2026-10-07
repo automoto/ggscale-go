@@ -18,16 +18,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Compile-time guard for the opt-in reconnect API.
-var _ = ReconnectPolicy{Enabled: true}
-
-func TestReconnectPolicyPublicShape(t *testing.T) {
+// TestReconnectPolicy_zero_value_should_reconnect guards the default: the
+// zero value reconnects, so the field must stay an opt-out.
+func TestReconnectPolicy_zero_value_should_reconnect(t *testing.T) {
 	policyType := reflect.TypeFor[ReconnectPolicy]()
 	_, hasEnabled := policyType.FieldByName("Enabled")
-	_, hasDisabled := policyType.FieldByName("Disabled")
 
-	assert.True(t, hasEnabled)
-	assert.False(t, hasDisabled, "the removed opt-out field must not be restored")
+	assert.False(t, hasEnabled || ReconnectPolicy{}.Disabled)
 }
 
 func TestRealtimeClient_ReadMessage(t *testing.T) {
@@ -200,7 +197,6 @@ func TestRealtimeClient_reconnects_after_retryable_close(t *testing.T) {
 		APIKey:  "k",
 		BaseURL: server.URL,
 		ReconnectPolicy: ReconnectPolicy{
-			Enabled:     true,
 			MaxAttempts: 2,
 			Jitter:      func(time.Duration) time.Duration { return 0 },
 		},
@@ -224,7 +220,7 @@ func TestRealtimeClient_reconnects_after_retryable_close(t *testing.T) {
 	require.Eventually(t, func() bool { return reconnects.Load() == 1 }, time.Second, time.Millisecond)
 }
 
-func TestRealtimeClient_does_not_reconnect_by_default(t *testing.T) {
+func TestRealtimeClient_should_not_reconnect_when_disabled(t *testing.T) {
 	var connections atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		connections.Add(1)
@@ -234,7 +230,7 @@ func TestRealtimeClient_does_not_reconnect_by_default(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c, err := NewClient(Options{APIKey: "k", BaseURL: server.URL})
+	c, err := NewClient(Options{APIKey: "k", BaseURL: server.URL, ReconnectPolicy: ReconnectPolicy{Disabled: true}})
 	require.NoError(t, err)
 	c.SetSession(&Session{AccessToken: "tok", ExpiresAt: time.Now().Add(time.Hour)})
 	rc, err := c.DialRealtime(context.Background())
@@ -268,8 +264,8 @@ func TestRealtimeClient_reconnect_hook_cannot_block_read_loop(t *testing.T) {
 	c, err := NewClient(Options{
 		APIKey: "k", BaseURL: server.URL,
 		ReconnectPolicy: ReconnectPolicy{
-			Enabled: true, MaxAttempts: 1,
-			Jitter: func(time.Duration) time.Duration { return 0 },
+			MaxAttempts: 1,
+			Jitter:      func(time.Duration) time.Duration { return 0 },
 		},
 		OnRealtimeReconnect: func(context.Context, *Client) {
 			close(hookStarted)

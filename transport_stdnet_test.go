@@ -563,3 +563,70 @@ func TestStdNetTransport_problem_details_and_retry_after_date(t *testing.T) {
 	assert.Equal(t, "server-request-id", apiErr.RequestID)
 	assert.Positive(t, apiErr.RetryAfter)
 }
+
+func TestStdNetTransport_Call_should_send_extra_headers(t *testing.T) {
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("Idempotency-Key")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	tr := &ggscale.StdNetTransport{BaseURL: srv.URL}
+	err := tr.Call(context.Background(), &ggscale.Request{
+		Method: http.MethodPost,
+		Path:   "/v1/echo",
+		APIKey: "ggs_testkey",
+		Header: http.Header{"Idempotency-Key": []string{"key-1"}},
+	}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "key-1", got)
+}
+
+// retryHits answers 503 with body until the second request, then 204, and
+// returns how many requests the transport sent for one POST with header.
+func retryHits(t *testing.T, body string, header http.Header) int32 {
+	t.Helper()
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if hits.Add(1) == 1 {
+			w.Header().Set("Content-Type", "application/problem+json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(body))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	tr := &ggscale.StdNetTransport{
+		BaseURL: srv.URL,
+		RetryPolicy: ggscale.RetryPolicy{
+			MaxAttempts: 2,
+			Jitter:      func(time.Duration) time.Duration { return 0 },
+		},
+	}
+
+	_ = tr.Call(context.Background(), &ggscale.Request{
+		Method: http.MethodPost, Path: "/v1/parties/9/queue", Body: map[string]int{"expected_version": 1}, Header: header,
+	}, nil)
+	return hits.Load()
+}
+
+func TestStdNetTransport_should_retry_post_with_idempotency_key(t *testing.T) {
+	hits := retryHits(t, `{"status":503,"detail":"busy"}`, http.Header{"Idempotency-Key": []string{"k"}})
+
+	assert.Equal(t, int32(2), hits)
+}
+
+func TestStdNetTransport_should_not_retry_disabled_party_queue(t *testing.T) {
+	hits := retryHits(t, `{"status":503,"detail":"party_enqueue_disabled"}`, http.Header{"Idempotency-Key": []string{"k"}})
+
+	assert.Equal(t, int32(1), hits)
+}
+
+func TestStdNetTransport_should_not_retry_post_without_idempotency_key(t *testing.T) {
+	hits := retryHits(t, `{"status":503,"detail":"busy"}`, nil)
+
+	assert.Equal(t, int32(1), hits)
+}

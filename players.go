@@ -57,6 +57,8 @@ func (s *PlayersService) Resolve(ctx context.Context, playerIDs []int64) ([]Publ
 }
 
 // ResolveFriendCode resolves a human-shareable friend code to a public player.
+// Returns ErrNotFound for an unknown, malformed, or cross-project code, and for
+// a player who is disabled, pending deletion, or blocked in either direction.
 func (s *PlayersService) ResolveFriendCode(ctx context.Context, code string) (*PublicPlayer, error) {
 	var player PublicPlayer
 	err := s.c.callProtected(ctx, &Request{

@@ -13,15 +13,12 @@ import (
 // session (publishable api_key + X-Session-Token) and returns the live
 // servers for the given fleet, with player counts.
 //
-// SendHeartbeat is consumed by game-server processes: it takes a secret
-// api_key (no session) and announces the server's address + current
-// player count. Servers should heartbeat every 5 s; ggscale-server's
-// registry expires entries that go ~15 s without a heartbeat.
+// The heartbeat for game-server processes is Client.Server.FleetHeartbeat.
 type FleetsService struct {
 	c *Client
 }
 
-// Heartbeat is the payload SendHeartbeat sends to ggscale-server.
+// Heartbeat is the payload FleetHeartbeat sends to ggscale-server.
 // AgonesName is the unique key — use the Agones GameServer CR name so
 // duplicate-pod scenarios upsert instead of double-listing.
 type Heartbeat struct {
@@ -53,23 +50,12 @@ type listServersResponse struct {
 	Servers []Server `json:"servers"`
 }
 
-// SendHeartbeat announces this game-server's liveness + player count.
-// Requires a SECRET-tier api_key on the client (publishable keys cannot
-// heartbeat). Idempotent — call every 5 s on a ticker.
+// SendHeartbeat is retained for compatibility.
+//
+// Deprecated: use Client.Server.FleetHeartbeat. The heartbeat needs a secret
+// key, so it belongs on the server client.
 func (s *FleetsService) SendHeartbeat(ctx context.Context, hb Heartbeat) error {
-	if hb.AgonesName == "" || hb.Fleet == "" || hb.Address == "" {
-		return errors.New("ggscale: heartbeat requires agones_name, fleet, and address")
-	}
-	if hb.MaxPlayers <= 0 {
-		return errors.New("ggscale: heartbeat max_players must be > 0")
-	}
-	return s.c.transport.Call(ctx, &Request{
-		OperationID: "fleetHeartbeat",
-		Method:      http.MethodPost,
-		Path:        "/v1/fleets/heartbeat",
-		APIKey:      s.c.apiKey,
-		Body:        hb,
-	}, nil)
+	return s.c.Server.FleetHeartbeat(ctx, hb)
 }
 
 // ListServers returns the live game-servers for the given fleet, scoped
