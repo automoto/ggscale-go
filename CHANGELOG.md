@@ -3,6 +3,84 @@
 All notable changes to `ggscale-go` are documented here. The project is
 pre-1.0; minor versions may contain breaking changes until v1.0.0.
 
+## [0.7.0]
+
+Synchronizes the SDK with ggscale server **v0.9.71**: player data deletion,
+parties, realtime events, and WebSocket tickets for browser builds. Version
+0.6.0 was never released; its changes are part of this release.
+
+### Breaking
+
+- Realtime reconnect is on by default, with capped full-jitter backoff.
+  `ReconnectPolicy.Enabled` is replaced by `ReconnectPolicy.Disabled`: remove
+  `Enabled: true`, and set `Disabled: true` to keep reconnect off. Use
+  `OnRealtimeReconnect` to read the state again after a reconnect.
+- A write with an `Idempotency-Key` header is retried like a read
+  (`Parties.Queue`, `Parties.Rematch`). A 503 `party_enqueue_disabled` is
+  never retried, because it is a server setting.
+- `Fleets.SendHeartbeat` is deprecated; use `Server.FleetHeartbeat`. The
+  heartbeat needs a secret key, so it is on the server client now. The old
+  method still works and calls the new one.
+- The browser build (`GOOS=js`) now has a working `DialRealtime` (see Added).
+  Before, it always returned an error.
+
+### Added
+
+- `Client.Parties` with all 19 party operations: `Create`, `Current`, `Get`,
+  `Update`, `Disband`, `Heartbeat`, `JoinByCode`, `Leave`, `SetReady`, `Kick`,
+  `CreateCode`, `RevokeCode`, `InviteFriend`, `ListInvites`, `AcceptInvite`,
+  `DeclineInvite`, `Queue`, `CancelQueue`, `Rematch`. Writes take the party
+  version. `Queue` and `Rematch` send an `Idempotency-Key` (given, or made by
+  the SDK).
+- `Parties.Watch` reports newer party versions, party invites and the
+  party's match on one realtime socket, and heartbeats every 10 seconds.
+  An invites-only watch (party ID 0) returns the dial error when the socket
+  cannot open; a party watch logs it and continues on the heartbeat.
+  `Parties.WaitForMatch` returns the party's match, or `*MatchFailedError`,
+  `ErrMatchCancelled` or `ErrNotPartyMember`.
+- Error sentinels `ErrStaleVersion` (409), `ErrPartyEnqueueDisabled` (503),
+  `ErrCodeCooldown` (429; read `RetryAfter`) and `ErrDeleteRequestedByTeam`.
+- Realtime event constants and payload types: `EventPresence`
+  (`PresenceEvent`), `EventGameInvite` (`GameInviteEvent`),
+  `EventPartyChanged` (`PartyChangedEvent`), `EventPartyInvite`
+  (`PartyInviteEvent`), and `Message.DecodePayload`.
+- `Realtime.CreateTicket` (`POST /v1/ws/ticket`). The browser build of
+  `DialRealtime` gets a new ticket for each dial, reconnects included, and
+  sends no headers. The game's page origin must be in the Game Project's
+  allowed origins.
+- `Ticket.EntryID`, `Ticket.PartyID`, `RosterEntry.QueueEntryID` and
+  `RosterEntry.PartyID`.
+- `Request.Header` for extra request headers.
+- `Auth.RequestDelete` schedules permanent deletion of the calling player's
+  data in the current project (`POST /v1/auth/delete`) and returns the request
+  and purge timestamps as `PendingDelete`. The server revokes every session,
+  so the local session is cleared on success.
+- `Auth.CancelDelete` clears a pending deletion with email and password
+  (`POST /v1/auth/delete/cancel`). It sends no session token. The server
+  answers 404 for an unknown email, a wrong password and no pending deletion
+  alike. When the game's team requested the deletion (403 with detail
+  `delete_requested_by_team`), the error matches
+  `ErrDeleteRequestedByTeam` and `ErrForbidden`. A 403 for a revoked key or a
+  disabled tenant matches only `ErrForbidden`.
+
+### Changed
+
+- `openapi.yaml` in the gg-scale repository is the only contract. The vendored
+  spec, the operation manifest and `internal/cmd/openapi-operations` are
+  removed. `TestOpenAPIOperationCoverage` reads the spec from `GGSCALE_SPEC`;
+  `make openapi-check` downloads it for `SPEC_REF` (`v0.9.71`), and CI runs
+  it. The test also checks that secret-key operations are on `Client.Server`.
+  `make openapi-generate` is removed.
+- `make check` and CI also vet the browser build. CI reads the Go version
+  from `go.mod`.
+- Integration tests default to `ghcr.io/automoto/gg-scale:v0.9.71`; override
+  with `GGSCALE_IMAGE`. New tests cover the party flow, a version conflict,
+  kick, leave, disband, the party-code cooldown, and one-time WebSocket
+  tickets.
+- `github.com/coder/websocket` v1.8.12 → v1.8.15, matching the server.
+- README: "Which key?", "Realtime events", "Parties" and "Defaults"
+  sections.
+
 ## [0.5.0]
 
 Synchronizes the SDK with ggscale server **v0.9.4** and expands the default
@@ -105,4 +183,3 @@ peer-to-peer GA.
   client depends on `github.com/coder/websocket`.
 - Corrected a stale `match_ready` reference in the realtime doc comment (the
   server emits `matchmaker_matched`).
-</content>

@@ -56,7 +56,7 @@ A runnable version of this lives in [`examples/quickstart/`](examples/quickstart
 
 | Service | Methods |
 |---|---|
-| `Client.Auth` | `Signup`, `Verify`, `ResendVerification`, `Refresh`, `Logout`, `LinkEmail`, `LinkSteam`, `ChangePassword`, `RequestPasswordReset`, `ConfirmPasswordReset`, `Disable` |
+| `Client.Auth` | `Signup`, `Verify`, `ResendVerification`, `Refresh`, `Logout`, `LinkEmail`, `LinkSteam`, `ChangePassword`, `RequestPasswordReset`, `ConfirmPasswordReset`, `Disable`, `RequestDelete`, `CancelDelete` |
 | `Client.Config` | `Get` (`ETag` / `If-None-Match`, no player login required) |
 | `Client.Storage` | `Get`, `Put`, `Delete`, `List`, `All` (metadata-only, cursor-paginated, OCC via `IfMatch`) |
 | `Client.Leaderboards` | `List`, `Submit` (when enabled), `Top`, `AroundMe`, `Friends`, `Periods`, `AllPeriods`, `PeriodTop` |
@@ -68,9 +68,11 @@ A runnable version of this lives in [`examples/quickstart/`](examples/quickstart
 | `Client.Presence` | `Set` |
 | `Client.Account` | `RemoteAddrs`, `SetRemoteAddrs` |
 | `Client.Matchmaker` | `CreateTicket`, `GetTicket`, `CancelTicket`, `WaitForMatch`, `ConnectP2P` |
-| `Client.Fleets` | `SendHeartbeat`, `ListServers` |
+| `Client.Parties` | `Create`, `Current`, `Get`, `Update`, `Disband`, `Heartbeat`, `JoinByCode`, `Leave`, `SetReady`, `Kick`, `CreateCode`, `RevokeCode`, `InviteFriend`, `ListInvites`, `AcceptInvite`, `DeclineInvite`, `Queue`, `CancelQueue`, `Rematch`, `Watch`, `WaitForMatch` |
+| `Client.Fleets` | `ListServers` (`SendHeartbeat` is deprecated; use `Server.FleetHeartbeat`) |
 | `Client.Relay` | `GetCredentials` |
-| `Client.Server` | `VerifySession`, `SubmitScore`, `PlayerRemoteAddrs`, `StorageGet`, `StoragePut`, `StorageList`, `StorageAll` (server-tier, secret API key) |
+| `Client.Realtime` | `CreateTicket` (one-time WebSocket ticket; browser builds use it for you) |
+| `Client.Server` | `VerifySession`, `FleetHeartbeat`, `SubmitScore`, `PlayerRemoteAddrs`, `StorageGet`, `StoragePut`, `StorageList`, `StorageAll` (server-tier, secret API key) |
 | `Client.Health` | `Get` |
 
 Game-session lifetime: a session lives in a one-hour sliding window — member
@@ -91,13 +93,102 @@ The `Client` is safe for concurrent use. Sessions auto-refresh: a proactive refr
 
 `DialRealtime` uses the same proxy, TLS, authentication, request-ID, and
 redacted logging configuration as REST calls. Incoming messages are capped at
-1 MiB by default. Reconnect is off by default because events emitted during an
-outage cannot be replayed. Opt in with `ReconnectPolicy{Enabled: true}` and use
-`Options.OnRealtimeReconnect` to re-read authoritative matchmaking, invite,
-friend, and presence state after recovery. Hooks run asynchronously so a slow
+1 MiB by default. After an abnormal close, the client reconnects with capped
+full-jitter backoff (five attempts by default). The server does not replay
+events sent during an outage, so use `Options.OnRealtimeReconnect` to re-read
+authoritative matchmaking, invite, friend, and presence state after recovery.
+Set `ReconnectPolicy{Disabled: true}` to turn reconnect off. Hooks run asynchronously so a slow
 or re-entrant hook cannot stop the receive loop. Keep exactly one goroutine
 calling `ReadMessage` for the connection's lifetime so control frames and
 server events are continuously processed.
+
+The server keeps one realtime socket per player: a new dial closes the
+player's older socket. `DialRealtime`, `Matchmaker.WaitForMatch`,
+`Parties.Watch` and `Parties.WaitForMatch` each open a socket, so use one of
+them at a time.
+
+## Which key?
+
+A game ships the **publishable key**. Use the **secret key** only on a game
+server or backend, never in a game build. Operations on `Client.Server` need
+the secret key, and a publishable key gets 403 there. Every other service
+takes the publishable key; a secret key also works, but it must never ship in
+a game.
+
+## Realtime events
+
+Every message has a `Type` and a JSON `Payload`. Decode the payload with
+`Message.DecodePayload`:
+
+| Type | Payload type |
+|---|---|
+| `EventMatchmakerMatched` | read by `Matchmaker.WaitForMatch` |
+| `EventPresence` | `PresenceEvent` |
+| `EventGameInvite` | `GameInviteEvent` |
+| `EventPartyChanged` | `PartyChangedEvent` |
+| `EventPartyInvite` | `PartyInviteEvent` |
+
+Events are best effort. A client that misses one recovers the state with the
+matching GET.
+
+Browser builds (`GOOS=js GOARCH=wasm`) cannot set WebSocket headers. There,
+`DialRealtime` gets a one-time ticket with `Realtime.CreateTicket` for each
+dial, reconnects included, and opens `/v1/ws?ticket=...`. Add the page origin
+of your game to the Game Project's allowed origins (in the dashboard, or with
+the MCP `set_allowed_origins` tool), or the server refuses the WebSocket.
+
+## Parties
+
+A party queues as one unit. Most writes take the party version you last saw;
+a stale version returns `ErrStaleVersion`, so read the party again and retry.
+Only the leader can update, disband, kick, invite, create or revoke codes,
+queue, cancel the queue and rematch.
+
+```go
+party, _ := leader.Parties.Create(ctx, ggscale.MatchRequest{Mode: ggscale.ModeMatchOnly, MinCount: 2, MaxCount: 4})
+code, _ := leader.Parties.CreateCode(ctx, party.ID, party.Version, 0)
+// Share code.Code; a friend calls member.Parties.JoinByCode(ctx, code.Code).
+
+// Each member: watch the party (this also sends the required heartbeat).
+go member.Parties.Watch(ctx, party.ID, func(ev ggscale.PartyEvent) error {
+    switch {
+    case ev.Party != nil:
+        // newer party state: members, readiness, state
+    case ev.Match != nil:
+        // the party matched; ev.Match is the same result as WaitForMatch
+    case ev.Removed:
+        // kicked, left, disbanded, or swept
+    }
+    return nil
+})
+```
+
+- Each member must heartbeat within 30 seconds or the server removes the
+  member. `Watch` heartbeats every 10 seconds. With party ID 0 it reports
+  party invites only.
+- `Queue` and `Rematch` send an `Idempotency-Key`. Pass your own key to retry
+  a call safely, or `""` to let the SDK make one. They return
+  `ErrPartyEnqueueDisabled` when the server turns party queue off.
+- `JoinByCode` returns `ErrCodeCooldown` after too many wrong codes. Wait for
+  `(*ggscale.Error).RetryAfter`; the server sets the cooldown.
+- `ListInvites` is the source of truth for invites. A re-invite of a pending
+  invite sends no new `party_invite` event.
+- `PartyMember.Attributes` come back exactly as the member sent them, HTML
+  included. Escape them before you show them.
+
+## Defaults
+
+- **HTTP retries:** up to three attempts in total, with capped full-jitter
+  exponential backoff, inside one call budget (`CallTimeout`, 30 seconds when
+  the caller sets no deadline). Only requests that are safe to repeat are
+  retried: `GET` and `HEAD`, and writes with an `Idempotency-Key`
+  (`Parties.Queue`, `Parties.Rematch`) or `Request.ReplaySafe`. Only
+  connection failures and 408, 429, 502, 503 and 504 are retried, and a
+  `Retry-After` from the server is followed. Other writes are never retried,
+  because a lost response does not show whether the write ran. Configure with
+  `Options.RetryPolicy`.
+- **Realtime reconnect:** on. See above; turn it off with
+  `ReconnectPolicy{Disabled: true}`.
 
 ## Errors
 
@@ -119,7 +210,9 @@ case errors.Is(err, ggscale.ErrRateLimited):
 }
 ```
 
-Sentinels: `ErrUnauthorized`, `ErrForbidden`, `ErrNotFound`, `ErrConflict`, `ErrRateLimited`, `ErrBadRequest`, `ErrValidation`.
+Sentinels: `ErrUnauthorized`, `ErrForbidden`, `ErrNotFound`, `ErrConflict`, `ErrRateLimited`, `ErrBadRequest`, `ErrValidation`, `ErrTicketActive`, `ErrStaleVersion`, `ErrPartyEnqueueDisabled`, `ErrCodeCooldown`, `ErrDeleteRequestedByTeam`.
+
+`Auth.CancelDelete` returns `ErrDeleteRequestedByTeam` (it also matches `ErrForbidden`) when the game's team requested the deletion. Only the team can cancel it.
 
 Field validation failures come back as `ErrValidation` (HTTP 422); the offending fields are in `err.(*ggscale.Error).Details`, each naming a `Location` (e.g. `body.status`) and `Message`.
 
@@ -158,19 +251,26 @@ backed `SessionStore`; never put tokens in URLs or logs.
 ## Development
 
 ```sh
-make check             # lint + vet + test
+make check             # lint + vet (native and browser) + test
 make test              # go test -race ./...
 make test-integration  # full-stack tests against a real server (Docker)
-make openapi-check     # fail if the v0.9.4 operation manifest drifted
+make openapi-check     # every operation in the server spec has a wrapper
 make lint              # golangci-lint
 make quickstart        # GGSCALE_API_KEY=... make quickstart
 ```
 
-For all future SDK contract updates, use the gg-scale repository's
-[OpenAPI specification](https://github.com/automoto/gg-scale/blob/main/openapi.yaml)
-as the source of truth. Refresh this repository's pinned `openapi.yaml` snapshot
-from that remote specification before regenerating or checking operation
-coverage.
+### API contract
+
+The [gg-scale repository](https://github.com/automoto/gg-scale/blob/main/openapi.yaml)
+owns `openapi.yaml`, the only contract for this SDK. There is no copy of it
+here. `make openapi-check` downloads the spec of the server tag `SPEC_REF`
+(now `v0.9.71`) and runs `TestOpenAPIOperationCoverage`. The test checks that
+each operation ID has an SDK wrapper, that each secret-key operation is on
+`Client.Server`, and that no other operation is only there. CI runs it.
+
+Use a local spec with `make openapi-check SPEC=../ggscale/openapi.yaml`. A sync
+with a new server release changes only `SPEC_REF`. Without `GGSCALE_SPEC`,
+`make test` skips the coverage test, so unit tests stay offline.
 
 Unit tests use `httptest.NewServer` and a fake `Transport`; they do not require
 a running ggscale server.
@@ -178,10 +278,10 @@ a running ggscale server.
 ### Integration tests
 
 `make test-integration` brings up a minimal stack with docker compose —
-Postgres plus `buildwrangler/ggscale:v0.9.4` pulled from Docker Hub (the
+Postgres plus `ghcr.io/automoto/gg-scale:v0.9.71` pulled from GHCR (the
 server applies its own migrations at startup) — seeds a tenant, project,
 and API keys directly via `integration/seed.sql`, runs the
-`-tags=integration` tests in `integration_test.go` against it on
+`-tags=integration` tests against it on
 `127.0.0.1:18080`, and tears everything down. Set `KEEP_STACK=1` to leave
 the stack running for debugging.
 

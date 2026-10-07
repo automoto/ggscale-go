@@ -1,15 +1,24 @@
-.PHONY: build test test-verbose test-integration lint vet vulncheck tidy quickstart openapi-generate openapi-check
+.PHONY: build test test-verbose test-integration lint vet vet-js vulncheck tidy quickstart openapi-check
 
 # Default target: run the same checks CI runs.
 .DEFAULT_GOAL := check
 
-check: openapi-check lint vet test
+check: lint vet vet-js test
 
-openapi-generate:
-	go run ./internal/cmd/openapi-operations -spec openapi.yaml -output testdata/openapi-v0.9.4-operations.txt
+# The gg-scale repository owns openapi.yaml; this repo keeps no copy.
+# openapi-check runs TestOpenAPIOperationCoverage against the spec of the
+# server tag SPEC_REF. It reads the network, so it is not part of `check`.
+# Use a local spec with SPEC=../ggscale/openapi.yaml.
+SPEC_REF ?= v0.9.71
+SPEC ?= https://raw.githubusercontent.com/automoto/gg-scale/$(SPEC_REF)/openapi.yaml
 
 openapi-check:
-	go run ./internal/cmd/openapi-operations -spec openapi.yaml -output testdata/openapi-v0.9.4-operations.txt -check
+	@case "$(SPEC)" in \
+	http*) tmp="$$(mktemp)" && trap 'rm -f "$$tmp"' EXIT && \
+		curl -fsSL "$(SPEC)" -o "$$tmp" && \
+		GGSCALE_SPEC="$$tmp" go test -count=1 -run TestOpenAPIOperationCoverage -v . ;; \
+	*) GGSCALE_SPEC="$(abspath $(SPEC))" go test -count=1 -run TestOpenAPIOperationCoverage -v . ;; \
+	esac
 
 build:
 	go build -o /dev/null ./...
@@ -20,7 +29,7 @@ test:
 test-verbose:
 	go test -race -v ./...
 
-# Spin up postgres + ggscale (pulled from Docker Hub) via docker compose,
+# Spin up postgres + ggscale (pulled from GHCR) via docker compose,
 # seed a tenant/project/API keys, run the -tags=integration tests, and
 # tear the stack down. KEEP_STACK=1 leaves it running for debugging.
 test-integration:
@@ -31,6 +40,10 @@ lint:
 
 vet:
 	go vet ./...
+
+# The browser build (GOOS=js) has its own realtime dial.
+vet-js:
+	GOOS=js GOARCH=wasm go vet ./...
 
 vulncheck:
 	go install golang.org/x/vuln/cmd/govulncheck@latest

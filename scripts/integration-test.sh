@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Brings up the integration stack (postgres + ggscale pulled from Docker
-# Hub), seeds it, runs the SDK integration tests, and tears the stack
+# Brings up the integration stack (postgres + ggscale pulled from GHCR),
+# seeds it, runs the SDK integration tests, and tears the stack
 # down.
 #
 #   KEEP_STACK=1            leave the stack running for debugging
-#   GGSCALE_IT_PULL=never   test a locally built buildwrangler/ggscale:latest
+#   GGSCALE_IT_PULL=never   test a local image named by GGSCALE_IMAGE
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

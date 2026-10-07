@@ -33,10 +33,11 @@ type FriendPresence struct {
 // Presence is nil unless the friendship is accepted and the friend is
 // known to the presence system.
 type Friend struct {
-	ID          int64           `json:"id"`
-	AccountID   string          `json:"account_id"`
-	PlayerID    *int64          `json:"player_id,omitempty"`
-	Status      string          `json:"status"`
+	ID        int64  `json:"id"`
+	AccountID string `json:"account_id"`
+	PlayerID  *int64 `json:"player_id,omitempty"`
+	Status    string `json:"status"`
+	// Email is set only for accepted friends.
 	Email       *string         `json:"email,omitempty"`
 	DisplayName *string         `json:"display_name,omitempty"`
 	Presence    *FriendPresence `json:"presence,omitempty"`

@@ -23,7 +23,7 @@ services:
   ggscale:
     # Pinned to an immutable release tag so contract tests can't silently
     # drift against a moving `latest`. Override with GGSCALE_IMAGE.
-    image: ${GGSCALE_IMAGE:-buildwrangler/ggscale:v0.9.4}
+    image: ${GGSCALE_IMAGE:-ghcr.io/automoto/gg-scale:v0.9.71}
     depends_on:
       postgres:
         condition: service_healthy

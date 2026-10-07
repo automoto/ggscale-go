@@ -1,9 +1,10 @@
 // Package ggscale is the official Go client for the ggscale API. It
 // covers the v1 surface needed by game code: player authentication,
-// per-player JSON storage, leaderboards, profile management, friends
-// and presence, player-hosted game sessions with invites, matchmaking,
-// real-time WebSocket events, TURN relay credentials, and server-tier
-// player-session verification.
+// account deletion, per-player JSON storage, leaderboards, profile
+// management, friends and presence, player-hosted game sessions with
+// invites, matchmaking, parties, real-time WebSocket events (also in
+// browser builds), TURN relay credentials, and server-tier calls such as
+// player-session verification and the fleet heartbeat.
 //
 // Start with NewClient, then call Login with one of the supplied
 // Authenticator implementations:
@@ -22,7 +23,9 @@
 // WaitForMatch combines the realtime push with polling recovery, so a
 // dropped WebSocket still returns the persisted match. For peer-to-peer
 // modes ConnectP2P additionally gathers TURN relay credentials and joins
-// the game session so peers can discover each other's endpoints.
+// the game session so peers can discover each other's endpoints. A party
+// queues as one unit: Client.Parties.Watch keeps each member in the party
+// and reports its changes and its match.
 //
 // The package is safe for concurrent use. Sessions auto-refresh
 // behind the scenes; callers who need to persist a session across

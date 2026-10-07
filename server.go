@@ -66,6 +66,25 @@ func (s *ServerService) VerifySession(ctx context.Context, sessionToken string) 
 	return &res, nil
 }
 
+// FleetHeartbeat announces this game-server's liveness and player count.
+// It needs a secret key. Call it every 5 seconds; the server registry
+// drops a server after about 15 seconds without a heartbeat.
+func (s *ServerService) FleetHeartbeat(ctx context.Context, hb Heartbeat) error {
+	if hb.AgonesName == "" || hb.Fleet == "" || hb.Address == "" {
+		return errors.New("ggscale: heartbeat requires agones_name, fleet, and address")
+	}
+	if hb.MaxPlayers <= 0 {
+		return errors.New("ggscale: heartbeat max_players must be > 0")
+	}
+	return s.transport.Call(ctx, &Request{
+		OperationID: "fleetHeartbeat",
+		Method:      http.MethodPost,
+		Path:        "/v1/fleets/heartbeat",
+		APIKey:      s.apiKey,
+		Body:        hb,
+	}, nil)
+}
+
 // SubmitScore posts an authoritative score for playerID. It requires a secret
 // server-tier key. A backend that begins with a player session token should
 // first call VerifySession and pass the returned PlayerID here.

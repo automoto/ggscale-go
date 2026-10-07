@@ -13,10 +13,17 @@ import (
 
 func TestAPIAuthenticationAndAccountLifecycleOperations(t *testing.T) {
 	ft := &fakeTransport{respond: func(req *Request) (any, error) {
-		if req.OperationID == "authSteam" {
+		switch req.OperationID {
+		case "authSteam":
 			return cannedSession(), nil
+		case "requestPlayerDelete":
+			return map[string]any{
+				"delete_requested_at": "2026-08-23T10:00:00Z",
+				"scheduled_purge_at":  "2026-09-22T10:00:00Z",
+			}, nil
+		default:
+			return nil, nil
 		}
-		return nil, nil
 	}}
 	ctx := context.Background()
 
@@ -43,6 +50,16 @@ func TestAPIAuthenticationAndAccountLifecycleOperations(t *testing.T) {
 	require.NoError(t, c.Auth.Disable(ctx, "new-password"))
 	assert.Equal(t, "disablePlayer", ft.gotReq.OperationID)
 	assert.Nil(t, c.Session())
+
+	c.SetSession(liveSession())
+	deletion, err := c.Auth.RequestDelete(ctx, "new-password")
+	require.NoError(t, err)
+	assert.Equal(t, "requestPlayerDelete", ft.gotReq.OperationID)
+	assert.Equal(t, 2026, deletion.ScheduledPurgeAt.Year())
+	assert.Nil(t, c.Session())
+
+	require.NoError(t, c.Auth.CancelDelete(ctx, "p@example.com", "new-password"))
+	assert.Equal(t, "authDeleteCancel", ft.gotReq.OperationID)
 }
 
 func TestAPIPlayerProfileAndPublicSessionOperations(t *testing.T) {
@@ -203,7 +220,7 @@ func TestAPIRemoteConfigETagAndHealth(t *testing.T) {
 			w.Header().Set("Cache-Control", "no-cache")
 			_, _ = w.Write([]byte(`{"maintenance_mode":false}`))
 		case "/v1/healthz":
-			_, _ = w.Write([]byte(`{"status":"ok","version":"0.9.4","commit":"abc123"}`))
+			_, _ = w.Write([]byte(`{"status":"ok","version":"0.9.6","commit":"abc123"}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -225,5 +242,5 @@ func TestAPIRemoteConfigETagAndHealth(t *testing.T) {
 
 	health, err := c.Health.Get(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "0.9.4", health.Version)
+	assert.Equal(t, "0.9.6", health.Version)
 }

@@ -133,6 +133,21 @@ func secondPlayerClient(t *testing.T) *ggscale.Client {
 	return sharedPlayer(t, 1)
 }
 
+// newThrowawayPlayerClient logs in a fresh anonymous player for tests that
+// destroy the account they run against; the shared players must survive the
+// whole suite.
+func newThrowawayPlayerClient(t *testing.T) *ggscale.Client {
+	t.Helper()
+	c, err := ggscale.NewClient(ggscale.Options{
+		BaseURL: baseURL(),
+		APIKey:  publishableKey(),
+	})
+	require.NoError(t, err)
+	auth := ggscale.NewAnonymousAuth(c.Transport(), publishableKey(), "")
+	require.NoError(t, c.Login(context.Background(), auth))
+	return c
+}
+
 // newServerClient builds a client the way a trusted game-server would:
 // the secret API key and no player session.
 func newServerClient(t *testing.T) *ggscale.Client {
@@ -165,6 +180,24 @@ func TestIntegration_AnonymousAuth_and_Refresh(t *testing.T) {
 	// The old refresh token is revoked server-side; keep the shared
 	// client on the rotated session for the rest of the suite.
 	c.SetSession(rotated)
+}
+
+func TestIntegration_Auth_RequestDelete_schedules_purge_and_revokes_sessions(t *testing.T) {
+	ctx := context.Background()
+	c := newThrowawayPlayerClient(t)
+	revoked := c.Session().RefreshToken
+
+	// An anonymous player has no password to re-authenticate with.
+	pending, err := c.Auth.RequestDelete(ctx, "")
+	require.NoError(t, err)
+	assert.False(t, pending.DeleteRequestedAt.IsZero())
+	assert.True(t, pending.ScheduledPurgeAt.After(pending.DeleteRequestedAt),
+		"the purge is scheduled a grace period out")
+	assert.Nil(t, c.Session(), "the SDK drops the session the server revoked")
+
+	_, err = c.Auth.Refresh(ctx, revoked)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ggscale.ErrUnauthorized))
 }
 
 func TestIntegration_Profile_Get_and_Patch_XUID(t *testing.T) {

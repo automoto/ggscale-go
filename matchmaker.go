@@ -65,7 +65,12 @@ type MatchRequest struct {
 // RosterEntry is one matched player, including the opaque attributes they
 // queued with so peers can exchange connect info.
 type RosterEntry struct {
-	PlayerID          int64              `json:"player_id"`
+	PlayerID int64 `json:"player_id"`
+	// QueueEntryID is the queue entry the player matched through. Party
+	// members share one entry.
+	QueueEntryID int64 `json:"queue_entry_id"`
+	// PartyID is set when the player queued as a party member.
+	PartyID           int64              `json:"party_id,omitempty"`
 	Region            string             `json:"region,omitempty"`
 	StringProperties  map[string]string  `json:"string_properties,omitempty"`
 	NumericProperties map[string]float64 `json:"numeric_properties,omitempty"`
@@ -76,7 +81,11 @@ type RosterEntry struct {
 // CreateTicket and GetTicket. Once matched it carries the full result so a
 // missed WebSocket push is recoverable by polling.
 type Ticket struct {
-	ID               int64  `json:"id"`
+	ID int64 `json:"id"`
+	// EntryID is the queue entry of this ticket. PartyID is set when the
+	// ticket belongs to a party queue entry.
+	EntryID          int64  `json:"entry_id"`
+	PartyID          int64  `json:"party_id,omitempty"`
 	Status           string `json:"status"`
 	Mode             string `json:"mode"`
 	Region           string `json:"region"`

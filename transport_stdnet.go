@@ -170,7 +170,7 @@ func (t *StdNetTransport) Call(parent context.Context, req *Request, out any) (r
 		if apiErr.RequestID == "" {
 			apiErr.RequestID = responseRequestID
 		}
-		if attempt < maxAttempts && requestIsReplayable(req) && retryableStatus(resp.StatusCode) {
+		if attempt < maxAttempts && requestIsReplayable(req) && retryableStatus(resp.StatusCode) && !errors.Is(apiErr, ErrPartyEnqueueDisabled) {
 			delay := t.retryDelay(attempt, baseDelay, maxDelay)
 			if apiErr.RetryAfter > 0 && !retryFitsDeadline(ctx, apiErr.RetryAfter) {
 				// Preserve the actionable HTTP error and Retry-After value instead
@@ -236,6 +236,11 @@ func (t *StdNetTransport) buildRequest(ctx context.Context, req *Request, reques
 	}
 	if req.IfNoneMatch != "" {
 		httpReq.Header.Set("If-None-Match", req.IfNoneMatch)
+	}
+	for name, values := range req.Header {
+		for _, v := range values {
+			httpReq.Header.Add(name, v)
+		}
 	}
 	return httpReq, nil
 }
@@ -474,7 +479,8 @@ func requestIsReplayable(req *Request) bool {
 	case http.MethodGet, http.MethodHead:
 		return true
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-		return req.ReplaySafe
+		// The server runs a write with an Idempotency-Key once.
+		return req.ReplaySafe || req.Header.Get("Idempotency-Key") != ""
 	default:
 		return false
 	}
