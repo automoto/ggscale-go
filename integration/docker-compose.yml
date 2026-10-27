@@ -1,4 +1,5 @@
-# Minimal stack for SDK integration tests: postgres + ggscale-server.
+# Minimal stack for SDK integration tests: postgres + ggscale-server + one
+# TURN relay node.
 # The server image applies its embedded migrations at startup, so no
 # separate migrate container is needed; scripts/integration-test.sh
 # seeds the tenant/project/API keys directly via psql once the server
@@ -23,7 +24,7 @@ services:
   ggscale:
     # Pinned to an immutable release tag so contract tests can't silently
     # drift against a moving `latest`. Override with GGSCALE_IMAGE.
-    image: ${GGSCALE_IMAGE:-ghcr.io/automoto/gg-scale:v0.9.71}
+    image: ${GGSCALE_IMAGE:-ghcr.io/automoto/gg-scale:v0.9.75}
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,15 +40,31 @@ services:
       # container. The control panel is likewise not under test.
       MAIL_PROVIDER: noop
       CONTROL_PANEL_DISABLED: "true"
-      # Enable the TURN relay so the p2p_relay integration test can mint
-      # credentials. Without both of these the RelayIssuer stays nil and
-      # the route is unmounted (404). There is no real TURN server in this
-      # single-node stack; the advertised URI is intentionally non-routable
-      # and the test asserts credentials, not an actual relay handshake.
+      # The server issues relay credentials for the nodes in its relay
+      # registry. scripts/integration-test.sh registers the relay service
+      # below through the admin API, and the registry probe marks it eligible.
       FEATURE_P2P_RELAY_ENABLED: "true"
-      # Must be >= 32 bytes (server enforces this when relay is enabled).
+      # Must be >= 32 bytes and equal to the relay's RELAY_SHARED_SECRET.
       RELAY_SHARED_SECRET: integration-relay-shared-secret-0123456789
-      RELAY_URLS: turn:relay.invalid:3478?transport=udp
+      RELAY_STUN_URLS: stun:127.0.0.1:13478
+      RELAY_PROBE_TOKEN: integration-relay-lifecycle-token-0123456789
+      PLATFORM_ADMIN_TOKEN: integration-platform-admin-token-0123456789
     ports:
       # 18080 so the stack can run alongside a dev server on 8080.
       - "127.0.0.1:18080:8080"
+
+  relay:
+    image: ${GGSCALE_IMAGE:-ghcr.io/automoto/gg-scale:v0.9.75}
+    command: ["relay"]
+    environment:
+      # The test clients reach the relay on 127.0.0.1:13478 and only use
+      # relayed candidates, so the relayed addresses can be loopback inside
+      # the container. That needs private peers allowed.
+      RELAY_PUBLIC_IP: 127.0.0.1
+      RELAY_ALLOW_PRIVATE_PEERS: "true"
+      RELAY_SHARED_SECRET: integration-relay-shared-secret-0123456789
+      RELAY_HEALTH_ADDR: 0.0.0.0:9091
+      LIFECYCLE_TOKEN: integration-relay-lifecycle-token-0123456789
+      LOG_LEVEL: info
+    ports:
+      - "127.0.0.1:13478:3478/udp"

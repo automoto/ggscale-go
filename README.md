@@ -324,13 +324,18 @@ a running ggscale server.
 
 ### Integration tests
 
-`make test-integration` brings up a minimal stack with docker compose —
-Postgres plus `ghcr.io/automoto/gg-scale:v0.9.71` pulled from GHCR (the
-server applies its own migrations at startup) — seeds a tenant, project,
-and API keys directly via `integration/seed.sql`, runs the
-`-tags=integration` tests against it on
-`127.0.0.1:18080`, and tears everything down. Set `KEEP_STACK=1` to leave
-the stack running for debugging.
+`make test-integration` brings up a minimal stack with docker compose:
+Postgres, `ghcr.io/automoto/gg-scale:v0.9.75` pulled from GHCR (the server
+applies its own migrations at startup) and one TURN relay node from the same
+image. It seeds a tenant, project, and API keys directly via
+`integration/seed.sql`, registers the relay through the admin API, runs the
+`-tags=integration` tests against it on `127.0.0.1:18080`, and tears
+everything down. Set `KEEP_STACK=1` to leave the stack running for debugging.
+
+`TestIntegration_E2E_RelayMatch` follows the connect flow of a two-player
+WebRTC game: anonymous login, a game session match, relay credentials for the
+match and region, an offer and an answer over game session signals, and data
+sent through the relay.
 
 ## License
 
