@@ -203,9 +203,11 @@ func (m *MatchmakerService) CancelTicket(ctx context.Context, id int64) error {
 }
 
 // WaitForMatch creates a ticket and blocks until it is matched, returning the
-// unified result for any mode. It combines the realtime push with periodic
-// authenticated ticket polling, so a dropped WebSocket still returns the
-// persisted match before its TTL. On context cancellation it best-effort
+// unified result for any mode. If the player already has an active ticket (for
+// example after a browser refresh or a crash), WaitForMatch cancels that
+// ticket and creates a new one, once. It combines the realtime push with
+// periodic authenticated ticket polling, so a dropped WebSocket still returns
+// the persisted match before its TTL. On context cancellation it best-effort
 // cancels a still-queued ticket. A failed ticket returns *MatchFailedError; a
 // cancelled ticket returns ErrMatchCancelled.
 func (m *MatchmakerService) WaitForMatch(ctx context.Context, req MatchRequest) (*MatchResult, error) {
@@ -216,7 +218,7 @@ func (m *MatchmakerService) WaitForMatch(ctx context.Context, req MatchRequest) 
 		defer func() { _ = rc.Close() }()
 	}
 
-	ticket, err := m.CreateTicket(ctx, req)
+	ticket, err := m.createTicketReplacingActive(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -276,6 +278,27 @@ func (m *MatchmakerService) WaitForMatch(ctx context.Context, req MatchRequest) 
 			}
 		}
 	}
+}
+
+// createTicketReplacingActive creates a ticket. If the player already has an
+// active ticket, it cancels that ticket and creates the ticket again, once.
+// Only WaitForMatch uses it: CreateTicket still returns ErrTicketActive.
+func (m *MatchmakerService) createTicketReplacingActive(ctx context.Context, req MatchRequest) (*Ticket, error) {
+	ticket, err := m.CreateTicket(ctx, req)
+	if !errors.Is(err, ErrTicketActive) {
+		return ticket, err
+	}
+	var conflict *Error
+	if !errors.As(err, &conflict) || conflict.ActiveTicketID() == 0 {
+		return nil, err
+	}
+	activeID := conflict.ActiveTicketID()
+	// ErrNotFound or ErrConflict: the ticket already ended, so the create can go on.
+	if cerr := m.CancelTicket(ctx, activeID); cerr != nil &&
+		!errors.Is(cerr, ErrNotFound) && !errors.Is(cerr, ErrConflict) {
+		return nil, fmt.Errorf("ggscale: cancel active matchmaking ticket %d: %w", activeID, cerr)
+	}
+	return m.CreateTicket(ctx, req)
 }
 
 // RequestMatch is retained for compatibility.

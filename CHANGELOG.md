@@ -5,6 +5,22 @@ pre-1.0; minor versions may contain breaking changes until v1.0.0.
 
 ## [Unreleased]
 
+## [0.7.3]
+
+### Changed
+
+- `WaitForMatch` recovers from an old active ticket. When the player already
+  has an active ticket (for example after a browser refresh or a crash),
+  `WaitForMatch` cancels that ticket and creates a new one, once. Before, it
+  returned `ErrTicketActive`. `CreateTicket` still returns `ErrTicketActive`.
+
+### Fixed
+
+- `Version` is `0.7.3`. Versions 0.7.1 and 0.7.2 sent `0.7.0` in the
+  User-Agent.
+
+## [0.7.2]
+
 ### Added
 
 - `WithRegion` asks `Relay.GetCredentials` for relays in one region.
