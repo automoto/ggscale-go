@@ -530,8 +530,8 @@ func TestIntegration_Matchmaker_MatchOnly_and_Relay(t *testing.T) {
 	assert.NotEqual(t, a.m.IsHost, b.m.IsHost, "exactly one peer hosts")
 
 	// Relay is enabled in the stack, so ConnectP2P gathered match-scoped
-	// credentials for each peer. The advertised TURN host is non-routable in
-	// this test stack; no relay connection is attempted.
+	// credentials for each peer. TestIntegration_E2E_RelayMatch connects
+	// through the relay.
 	require.NotNil(t, a.m.Relay, "relay enabled → credentials fetched")
 	require.NoError(t, a.m.RelayError)
 	require.NoError(t, b.m.RelayError)
@@ -552,7 +552,8 @@ func TestIntegration_Relay_Credentials(t *testing.T) {
 	assert.NotEmpty(t, creds.Password)
 	assert.Positive(t, creds.TTL)
 	assert.Equal(t, "ggscale", creds.Realm)
-	assert.Equal(t, []string{"turn:relay.invalid:3478?transport=udp"}, creds.URLs)
+	assert.Equal(t, []string{itTURNURL}, creds.URLs)
+	assert.Equal(t, []string{itSTUNURL}, creds.STUNURLs)
 }
 
 func TestIntegration_Realtime_Dial(t *testing.T) {
