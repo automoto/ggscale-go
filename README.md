@@ -70,7 +70,7 @@ A runnable version of this lives in [`examples/quickstart/`](examples/quickstart
 | `Client.Matchmaker` | `CreateTicket`, `GetTicket`, `CancelTicket`, `WaitForMatch`, `ConnectP2P` |
 | `Client.Parties` | `Create`, `Current`, `Get`, `Update`, `Disband`, `Heartbeat`, `JoinByCode`, `Leave`, `SetReady`, `Kick`, `CreateCode`, `RevokeCode`, `InviteFriend`, `ListInvites`, `AcceptInvite`, `DeclineInvite`, `Queue`, `CancelQueue`, `Rematch`, `Watch`, `WaitForMatch` |
 | `Client.Fleets` | `ListServers` (`SendHeartbeat` is deprecated; use `Server.FleetHeartbeat`) |
-| `Client.Relay` | `GetCredentials` |
+| `Client.Relay` | `GetCredentials` (`WithMatch`, `WithRegion`), `KeepFresh` |
 | `Client.Realtime` | `CreateTicket` (one-time WebSocket ticket; browser builds use it for you) |
 | `Client.Server` | `VerifySession`, `FleetHeartbeat`, `SubmitScore`, `PlayerRemoteAddrs`, `StorageGet`, `StoragePut`, `StorageList`, `StorageAll` (server-tier, secret API key) |
 | `Client.Health` | `Get` |
@@ -175,6 +175,51 @@ go member.Parties.Watch(ctx, party.ID, func(ev ggscale.PartyEvent) error {
   invite sends no new `party_invite` event.
 - `PartyMember.Attributes` come back exactly as the member sent them, HTML
   included. Escape them before you show them.
+
+## Relay credentials
+
+`Relay.GetCredentials` returns short-lived TURN credentials (about 5 minutes)
+and the TURN URLs of the relays that can take new sessions. Pass
+`WithRegion("us-east")` to prefer nearby relays; `Credentials.Region` says
+which region was served, or `""` when the URLs span regions. When no relay is
+available the server answers 503 with `Retry-After`, and the call is retried
+within the client's `RetryPolicy` and your context deadline.
+
+Keep credentials fresh for the whole session. The relay refuses an
+allocation refresh signed with an expired credential, so a session that keeps
+its first credentials loses its relay after about 10 minutes. `KeepFresh`
+fetches new credentials at 80% of each TTL and hands them to your callback,
+which updates the peer connection's ICE servers:
+
+```go
+go func() {
+    _ = client.Relay.KeepFresh(ctx, func(c *ggscale.Credentials) {
+        iceServers := []webrtc.ICEServer{{URLs: c.URLs, Username: c.Username, Credential: c.Password}}
+        cfg := pc.GetConfiguration()
+        cfg.ICEServers = iceServers
+        _ = pc.SetConfiguration(cfg)
+    }, ggscale.WithRegion("us-east"))
+}()
+```
+
+### Recover from a relay restart (ICE restart)
+
+Relays are replaced by draining: a drained relay refuses new allocations and
+keeps current ones until a deadline, then stops. A session still on it at the
+deadline loses its relayed path. Recover it with an ICE restart over the
+session's signals mailbox:
+
+1. Start when the peer connection's ICE state is `failed`, or `disconnected`
+   for more than 3 seconds.
+2. Get fresh credentials (or use the latest from `KeepFresh`) and set them as
+   the ICE servers. They list only relays that take new sessions.
+3. Only the peer with the lower player ID creates an offer with ICE restart
+   on and sends it as `ggscale.SignalKindRestartOffer`. The other peer answers
+   with `ggscale.SignalKindRestartAnswer`. This keeps both peers from
+   restarting at once.
+4. Retry with backoff, at most 3 times, then report the peer as lost.
+5. Count signals: the mailbox allows 30 signals per minute per sender per
+   session.
 
 ## Defaults
 

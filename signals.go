@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+// Signal kinds for peer negotiation. The set is open: pass unknown kinds
+// through as strings. Use the restart kinds to renegotiate ICE on an existing
+// peer connection, for example after its relay is drained.
+const (
+	SignalKindOffer         = "offer"
+	SignalKindAnswer        = "answer"
+	SignalKindRestartOffer  = "restart_offer"
+	SignalKindRestartAnswer = "restart_answer"
+)
+
 // GameSessionSignalsService exchanges short-lived negotiation data between
 // authenticated members of a game session.
 type GameSessionSignalsService struct{ c *Client }

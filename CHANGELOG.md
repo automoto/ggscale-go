@@ -5,6 +5,19 @@ pre-1.0; minor versions may contain breaking changes until v1.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- `WithRegion` asks `Relay.GetCredentials` for relays in one region.
+  `Credentials.Region` reports the region served, or `""` when the URLs span
+  regions.
+- `Relay.KeepFresh` fetches relay credentials again at 80% of each TTL and
+  passes them to a callback, retrying transient errors with backoff. The relay
+  refuses a refresh signed with an expired credential, so long sessions need
+  this.
+- `SignalKindOffer`, `SignalKindAnswer`, `SignalKindRestartOffer` and
+  `SignalKindRestartAnswer`, matching the C# SDK. The README describes an ICE
+  restart recipe for sessions whose relay was drained.
+
 ### Changed
 
 - A write is now retried when the request was never sent: a DNS failure, or
@@ -12,6 +25,9 @@ pre-1.0; minor versions may contain breaking changes until v1.0.0.
   not run the write. A write is still not retried after a failure on an open
   connection, or after an HTTP response, unless it has an `Idempotency-Key`
   or sets `ReplaySafe`.
+- `Relay.GetCredentials` is retried on a 503 "no eligible relay" answer (and
+  other retryable statuses), honoring `Retry-After`. Minting credentials
+  changes no server state.
 
 ## [0.7.0]
 
