@@ -552,7 +552,7 @@ func TestIntegration_Relay_Credentials(t *testing.T) {
 	assert.NotEmpty(t, creds.Password)
 	assert.Positive(t, creds.TTL)
 	assert.Equal(t, "ggscale", creds.Realm)
-	assert.Equal(t, []string{itTURNURL}, creds.URLs)
+	assert.ElementsMatch(t, []string{itTURNURL, itTURNURL2}, creds.URLs)
 	assert.Equal(t, []string{itSTUNURL}, creds.STUNURLs)
 }
 

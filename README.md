@@ -221,6 +221,10 @@ session's signals mailbox:
 5. Count signals: the mailbox allows 30 signals per minute per sender per
    session.
 
+`TestIntegration_E2E_RelayFailover` in `e2e_integration_test.go` runs this
+flow against two relays: it drains the one a match uses, and the peers recover
+through the other.
+
 ## Defaults
 
 - **HTTP retries:** up to three attempts in total, with capped full-jitter
@@ -326,16 +330,18 @@ a running ggscale server.
 
 `make test-integration` brings up a minimal stack with docker compose:
 Postgres, `ghcr.io/automoto/gg-scale:v0.9.75` pulled from GHCR (the server
-applies its own migrations at startup) and one TURN relay node from the same
-image. It seeds a tenant, project, and API keys directly via
-`integration/seed.sql`, registers the relay through the admin API, runs the
+applies its own migrations at startup) and two TURN relay nodes in one region
+from the same image. It seeds a tenant, project, and API keys directly via
+`integration/seed.sql`, registers the relays through the admin API, runs the
 `-tags=integration` tests against it on `127.0.0.1:18080`, and tears
 everything down. Set `KEEP_STACK=1` to leave the stack running for debugging.
 
 `TestIntegration_E2E_RelayMatch` follows the connect flow of a two-player
 WebRTC game: anonymous login, a game session match, relay credentials for the
 match and region, an offer and an answer over game session signals, and data
-sent through the relay.
+sent through the relay. `TestIntegration_E2E_RelayFailover` drains that relay
+and recovers the session through the other one with `restart_offer` and
+`restart_answer`.
 
 ## License
 
