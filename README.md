@@ -59,7 +59,7 @@ A runnable version of this lives in [`examples/quickstart/`](examples/quickstart
 | `Client.Auth` | `Signup`, `Verify`, `ResendVerification`, `Refresh`, `Logout`, `LinkEmail`, `LinkSteam`, `ChangePassword`, `RequestPasswordReset`, `ConfirmPasswordReset`, `Disable`, `RequestDelete`, `CancelDelete` |
 | `Client.Config` | `Get` (`ETag` / `If-None-Match`, no player login required) |
 | `Client.Storage` | `Get`, `Put`, `Delete`, `List`, `All` (metadata-only, cursor-paginated, OCC via `IfMatch`) |
-| `Client.Leaderboards` | `List`, `Submit` (when enabled), `Top`, `AroundMe`, `Friends`, `Periods`, `AllPeriods`, `PeriodTop` |
+| `Client.Leaderboards` | `List`, `ListPage`, `All`, `Submit` (when enabled), `Top`, `AroundMe`, `Friends`, `Periods`, `AllPeriods`, `PeriodTop` |
 | `Client.Profile` | `Get`, `Update`, `RegenerateFriendCode` |
 | `Client.Players` | `Get`, `Resolve`, `ResolveFriendCode` |
 | `Client.Friends` | `List`, `All`, `Request`, `Accept`, `Reject`, `Remove`, `Block`, `Unblock`, `RemoteAddrs` |
@@ -74,6 +74,11 @@ A runnable version of this lives in [`examples/quickstart/`](examples/quickstart
 | `Client.Realtime` | `CreateTicket` (one-time WebSocket ticket; browser builds use it for you) |
 | `Client.Server` | `VerifySession`, `FleetHeartbeat`, `SubmitScore`, `PlayerRemoteAddrs`, `StorageGet`, `StoragePut`, `StorageList`, `StorageAll` (server-tier, secret API key) |
 | `Client.Health` | `Get` |
+
+Leaderboard listing: the server returns at most 100 leaderboards per page,
+sorted by name. `List` fetches every page. Use `All` to iterate and stop early,
+or `ListPage` with `LeaderboardListOptions{Limit, Cursor}` to read one page; an
+empty `NextCursor` means there are no more pages.
 
 Game-session lifetime: a session lives in a one-hour sliding window — member
 `Heartbeat` calls extend it while the match runs, and an idle session expires
@@ -315,9 +320,14 @@ make quickstart        # GGSCALE_API_KEY=... make quickstart
 The [gg-scale repository](https://github.com/automoto/gg-scale/blob/main/openapi.yaml)
 owns `openapi.yaml`, the only contract for this SDK. There is no copy of it
 here. `make openapi-check` downloads the spec of the server tag `SPEC_REF`
-(now `v0.9.71`) and runs `TestOpenAPIOperationCoverage`. The test checks that
+(now `v0.9.91`) and runs `TestOpenAPIOperationCoverage`. The test checks that
 each operation ID has an SDK wrapper, that each secret-key operation is on
 `Client.Server`, and that no other operation is only there. CI runs it.
+
+The check skips operations whose only security is `ManagementToken`
+(`/v1/project`, the management API) or `PlatformAdminToken` (`/v1/admin`).
+Those serve developer and operator tooling, not game code, so this SDK does
+not wrap them.
 
 Use a local spec with `make openapi-check SPEC=../ggscale/openapi.yaml`. A sync
 with a new server release changes only `SPEC_REF`. Without `GGSCALE_SPEC`,
@@ -329,7 +339,7 @@ a running ggscale server.
 ### Integration tests
 
 `make test-integration` brings up a minimal stack with docker compose:
-Postgres, `ghcr.io/automoto/gg-scale:v0.9.75` pulled from GHCR (the server
+Postgres, `ghcr.io/automoto/gg-scale:v0.9.91` pulled from GHCR (the server
 applies its own migrations at startup) and two TURN relay nodes in one region
 from the same image. It seeds a tenant, project, and API keys directly via
 `integration/seed.sql`, registers the relays through the admin API, runs the

@@ -271,6 +271,21 @@ func TestIntegration_Storage_CRUD_and_OCC(t *testing.T) {
 	assert.True(t, errors.Is(err, ggscale.ErrNotFound))
 }
 
+func TestIntegration_Leaderboards_ListPage_should_follow_the_cursor(t *testing.T) {
+	ctx := context.Background()
+	player := newPlayerClient(t)
+
+	first, err := player.Leaderboards.ListPage(ctx, ggscale.LeaderboardListOptions{Limit: 1})
+	require.NoError(t, err)
+	second, err := player.Leaderboards.ListPage(ctx, ggscale.LeaderboardListOptions{Limit: 1, Cursor: first.NextCursor})
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, first.NextCursor)
+	assert.Equal(t, []string{"integration", "integration-paging"},
+		[]string{first.Leaderboards[0].Name, second.Leaderboards[0].Name})
+	assert.Empty(t, second.NextCursor)
+}
+
 func TestIntegration_Leaderboards_SubmitScore_Top_AroundMe(t *testing.T) {
 	ctx := context.Background()
 	player := newPlayerClient(t)
@@ -278,7 +293,7 @@ func TestIntegration_Leaderboards_SubmitScore_Top_AroundMe(t *testing.T) {
 	playerID := player.Session().PlayerID
 	boards, err := player.Leaderboards.List(ctx)
 	require.NoError(t, err)
-	require.Len(t, boards, 1)
+	require.Len(t, boards, 2)
 	assert.Equal(t, seededLeaderboardID, boards[0].ID)
 	assert.False(t, boards[0].ClientSubmissions)
 
