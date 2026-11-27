@@ -41,8 +41,11 @@ WHERE NOT EXISTS (
     WHERE tenant_id = 1 AND project_id = 1 AND feature = 'p2p_relay'
 );
 
+-- A second board, sorted after the first by name, so the leaderboard list
+-- can be paged one board at a time.
 INSERT INTO leaderboards (id, tenant_id, project_id, name, sort_order)
-VALUES (1, 1, 1, 'integration', 'desc')
+VALUES (1, 1, 1, 'integration', 'desc'),
+       (2, 1, 1, 'integration-paging', 'desc')
 ON CONFLICT (id) DO NOTHING;
 
 -- Keep the sequences ahead of the explicit ids above.

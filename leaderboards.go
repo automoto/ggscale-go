@@ -85,20 +85,65 @@ type entriesResponse struct {
 	Entries []Entry `json:"entries"`
 }
 
-// List returns the leaderboard definitions available to this project.
+// LeaderboardListOptions configures cursor pagination for List. The server
+// returns at most 100 leaderboards per page, sorted by name.
+type LeaderboardListOptions struct {
+	Limit  int
+	Cursor string
+}
+
+// LeaderboardListPage is one page of leaderboard definitions. An empty
+// NextCursor means there are no more pages.
+type LeaderboardListPage struct {
+	Leaderboards []LeaderboardInfo `json:"leaderboards"`
+	NextCursor   string            `json:"next_cursor"`
+}
+
+// List returns every leaderboard definition available to this project,
+// fetching all pages. Use All to stop early or ListPage for one page.
 func (l *LeaderboardsService) List(ctx context.Context) ([]LeaderboardInfo, error) {
-	var result struct {
-		Leaderboards []LeaderboardInfo `json:"leaderboards"`
+	boards := []LeaderboardInfo{}
+	for board, err := range l.All(ctx, LeaderboardListOptions{}) {
+		if err != nil {
+			return nil, err
+		}
+		boards = append(boards, board)
 	}
+	return boards, nil
+}
+
+// ListPage returns one page of leaderboard definitions, sorted by name.
+func (l *LeaderboardsService) ListPage(ctx context.Context, opts LeaderboardListOptions) (*LeaderboardListPage, error) {
+	query := url.Values{}
+	if opts.Limit > 0 {
+		query.Set("limit", strconv.Itoa(opts.Limit))
+	}
+	if opts.Cursor != "" {
+		query.Set("cursor", opts.Cursor)
+	}
+	var page LeaderboardListPage
 	err := l.c.callProtected(ctx, &Request{
 		OperationID: "listLeaderboards",
 		Method:      http.MethodGet,
 		Path:        "/v1/leaderboards",
-	}, &result)
+		Query:       query,
+	}, &page)
 	if err != nil {
 		return nil, err
 	}
-	return result.Leaderboards, nil
+	return &page, nil
+}
+
+// All iterates leaderboard definitions across every cursor page.
+func (l *LeaderboardsService) All(ctx context.Context, opts LeaderboardListOptions) iter.Seq2[LeaderboardInfo, error] {
+	return cursorSequence(opts.Cursor, func(cursor string) ([]LeaderboardInfo, string, error) {
+		opts.Cursor = cursor
+		page, err := l.ListPage(ctx, opts)
+		if err != nil {
+			return nil, "", err
+		}
+		return page.Leaderboards, page.NextCursor, nil
+	})
 }
 
 // Submit posts a score as the current player. The leaderboard must explicitly

@@ -24,7 +24,7 @@ services:
   ggscale:
     # Pinned to an immutable release tag so contract tests can't silently
     # drift against a moving `latest`. Override with GGSCALE_IMAGE.
-    image: ${GGSCALE_IMAGE:-ghcr.io/automoto/gg-scale:v0.9.75}
+    image: ${GGSCALE_IMAGE:-ghcr.io/automoto/gg-scale:v0.9.91}
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,7 +54,7 @@ services:
       - "127.0.0.1:18080:8080"
 
   relay:
-    image: ${GGSCALE_IMAGE:-ghcr.io/automoto/gg-scale:v0.9.75}
+    image: ${GGSCALE_IMAGE:-ghcr.io/automoto/gg-scale:v0.9.91}
     command: ["relay"]
     environment:
       # The test clients reach the relay on 127.0.0.1:13478 and only use
@@ -73,7 +73,7 @@ services:
   # one through its health port. Peers must share a relay: each relay's
   # relayed addresses are loopback inside its own container.
   relay2:
-    image: ${GGSCALE_IMAGE:-ghcr.io/automoto/gg-scale:v0.9.75}
+    image: ${GGSCALE_IMAGE:-ghcr.io/automoto/gg-scale:v0.9.91}
     command: ["relay"]
     environment:
       RELAY_PUBLIC_IP: 127.0.0.1

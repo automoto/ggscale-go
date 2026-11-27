@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -143,4 +144,81 @@ func TestServer_SubmitScore_does_not_mutate_client_session(t *testing.T) {
 
 	assert.Equal(t, "operator.jwt", c.Session().AccessToken)
 	assert.Empty(t, ft.gotReq.SessionToken)
+}
+
+func TestLeaderboards_ListPage_passes_limit_and_cursor(t *testing.T) {
+	ft := &fakeTransport{respond: func(*Request) (any, error) {
+		return map[string]any{"leaderboards": []map[string]any{}, "next_cursor": ""}, nil
+	}}
+	c := newClientWithFake(t, ft)
+
+	_, err := c.Leaderboards.ListPage(context.Background(), LeaderboardListOptions{Limit: 25, Cursor: "weekly"})
+
+	require.NoError(t, err)
+	assert.Equal(t, url.Values{"limit": {"25"}, "cursor": {"weekly"}}, ft.gotReq.Query)
+}
+
+func TestLeaderboards_ListPage_returns_next_cursor(t *testing.T) {
+	ft := &fakeTransport{respond: func(*Request) (any, error) {
+		return map[string]any{
+			"leaderboards": []map[string]any{{"id": 1, "name": "alltime"}},
+			"next_cursor":  "alltime",
+		}, nil
+	}}
+	c := newClientWithFake(t, ft)
+
+	page, err := c.Leaderboards.ListPage(context.Background(), LeaderboardListOptions{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "alltime", page.NextCursor)
+}
+
+func TestLeaderboards_List_walks_every_page(t *testing.T) {
+	var cursors []string
+	ft := &fakeTransport{respond: func(req *Request) (any, error) {
+		cursor := req.Query.Get("cursor")
+		cursors = append(cursors, cursor)
+		if cursor == "" {
+			return map[string]any{"leaderboards": []map[string]any{{"id": 1, "name": "alltime"}}, "next_cursor": "alltime"}, nil
+		}
+		return map[string]any{"leaderboards": []map[string]any{{"id": 2, "name": "weekly"}}, "next_cursor": ""}, nil
+	}}
+	c := newClientWithFake(t, ft)
+
+	boards, err := c.Leaderboards.List(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"", "alltime"}, cursors)
+	assert.Equal(t, []string{"alltime", "weekly"}, []string{boards[0].Name, boards[1].Name})
+}
+
+func TestLeaderboards_All_stops_when_the_caller_breaks(t *testing.T) {
+	ft := &fakeTransport{respond: func(*Request) (any, error) {
+		return map[string]any{
+			"leaderboards": []map[string]any{{"id": 1, "name": "alltime"}, {"id": 2, "name": "daily"}},
+			"next_cursor":  "daily",
+		}, nil
+	}}
+	c := newClientWithFake(t, ft)
+
+	for _, err := range c.Leaderboards.All(context.Background(), LeaderboardListOptions{}) {
+		require.NoError(t, err)
+		break
+	}
+
+	assert.Equal(t, 1, ft.callCount)
+}
+
+func TestLeaderboards_List_returns_error_from_a_later_page(t *testing.T) {
+	ft := &fakeTransport{respond: func(req *Request) (any, error) {
+		if req.Query.Get("cursor") == "" {
+			return map[string]any{"leaderboards": []map[string]any{{"id": 1, "name": "alltime"}}, "next_cursor": "alltime"}, nil
+		}
+		return nil, &APIError{Status: http.StatusServiceUnavailable}
+	}}
+	c := newClientWithFake(t, ft)
+
+	_, err := c.Leaderboards.List(context.Background())
+
+	assert.Error(t, err)
 }
